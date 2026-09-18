@@ -7,6 +7,19 @@ from vtkmodules.vtkRenderingCore import vtkBillboardTextActor3D
 FACES = np.array([4,0,1,2,3, 4,4,7,6,5, 4,0,4,5,1, 4,1,5,6,2,
                   4,2,6,7,3, 4,3,7,4,0])
 
+# Head-local right/forward/up coordinates. Temple arms extend back from
+# the outer rims, with short downward tips; dimensions remain placeholders.
+GLASSES_POINTS = np.array([
+    [-.08,.1,-.03],[-.01,.1,-.03],[-.01,.1,.03],[-.08,.1,.03],
+    [.01,.1,-.03],[.08,.1,-.03],[.08,.1,.03],[.01,.1,.03],
+    [-.08,.1,.015],[-.08,-.025,.015],[-.08,-.045,-.015],
+    [.08,.1,.015],[.08,-.025,.015],[.08,-.045,-.015],
+])
+GLASSES_LINES = np.array([
+    6,0,1,2,3,8,0, 6,4,5,11,6,7,4, 2,1,4,
+    3,8,9,10, 3,11,12,13,
+])
+
 def placeholder_points(spread):
     # Visual prototype only: near rectangle and manually scaled far rectangle.
     return np.array([[-.07,.1,-.025],[.07,.1,-.025],[.07,.1,.025],[-.07,.1,.025],
@@ -28,7 +41,7 @@ class Viewport(QtInteractor):
         lines = np.column_stack((np.full(len(recording.bones),2),recording.bones)).ravel()
         for p,color in enumerate(('#59c9f1','#ffb56b')):
             skeleton = pv.PolyData(np.nan_to_num(recording.joints[p,0]).copy(), lines=lines)
-            glasses = pv.PolyData(np.zeros((8,3)), lines=np.array([5,0,1,2,3,0,5,4,5,6,7,4,2,1,4]))
+            glasses = pv.PolyData(GLASSES_POINTS.copy(), lines=GLASSES_LINES)
             frustum = pv.PolyData(np.zeros((8,3)), faces=FACES)
             for mesh, options in ((skeleton,dict(color=color,line_width=5)),
                                   (glasses,dict(color='white',line_width=4)),
@@ -71,9 +84,7 @@ class Viewport(QtInteractor):
             transform = self.recording.heads[p,frame]
             rot,origin = transform[:3,:3],transform[:3,3]
             skeleton.points[:] = self.recording.joints[p,frame]
-            local = np.array([[-.08,.1,-.03],[-.01,.1,-.03],[-.01,.1,.03],[-.08,.1,.03],
-                              [.01,.1,-.03],[.08,.1,-.03],[.08,.1,.03],[.01,.1,.03]])
-            glasses.points[:] = local @ rot.T + origin
+            glasses.points[:] = GLASSES_POINTS @ rot.T + origin
             frustum.points[:] = placeholder_points(spread) @ rot.T + origin
             for mesh in (skeleton,glasses,frustum):
                 mesh.GetPoints().Modified()
