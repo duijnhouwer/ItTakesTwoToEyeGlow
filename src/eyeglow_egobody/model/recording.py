@@ -1,5 +1,5 @@
-"""Deterministic synthetic fixture. Meters, Z up, local +Y forward, +X right."""
-from dataclasses import dataclass
+"""Normalized motion and deterministic fixture. Meters, Z up; optics +Y forward."""
+from dataclasses import dataclass, field
 import numpy as np
 
 BONES = np.array([(0,1),(1,2),(2,3),(2,4),(4,5),(5,6),(2,7),(7,8),(8,9),
@@ -12,6 +12,17 @@ class Recording:
     heads: np.ndarray
     fps: float = 30.0
     name: str = "synthetic_motion"
+
+    valid: np.ndarray | None = None
+    frame_ids: np.ndarray | None = None
+    bones: np.ndarray = field(default_factory=lambda: BONES.copy())
+    metadata: dict = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.valid is None:
+            object.__setattr__(self, 'valid', np.ones(self.joints.shape[:2], dtype=bool))
+        if self.frame_ids is None:
+            object.__setattr__(self, 'frame_ids', np.arange(len(self.timestamps)))
 
     @property
     def frame_count(self):

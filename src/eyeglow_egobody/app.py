@@ -3,11 +3,15 @@ import argparse
 import os
 from pathlib import Path
 import sys
+from eyeglow_egobody.runtime_paths import project_root, default_dataset
 
 
 def main():
-    parser = argparse.ArgumentParser(description='EyeGlow Phase 1 synthetic desktop prototype')
+    parser = argparse.ArgumentParser(description='EyeGlow EgoBody paired motion playback')
     parser.add_argument('--output-dir',type=Path)
+    parser.add_argument('--dataset', type=Path, default=default_dataset())
+    parser.add_argument('--model-dir', type=Path, default=os.environ.get('EYEGLOW_MODEL_DIR'))
+    parser.add_argument('--synthetic', action='store_true', help='Use the deterministic synthetic fixture')
     parser.add_argument('--smoke-test',action='store_true',help='Exercise GUI and exports, then exit')
     args = parser.parse_args()
     os.environ['QT_API'] = 'pyside6'
@@ -30,7 +34,7 @@ def main():
         output = safe_directory(output)
     except (ValueError,OSError) as exc:
         parser.error(str(exc))
-    window = MainWindow(output)
+    window = MainWindow(output, dataset=None if args.synthetic or args.smoke_test else args.dataset, model_dir=args.model_dir)
     window.show()
     if args.smoke_test:
         from eyeglow_egobody.smoke import start_smoke

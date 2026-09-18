@@ -1,26 +1,49 @@
 from time import monotonic
+from pathlib import Path
+import json
+import numpy as np
 from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
-                               QMessageBox,QDialog,QStyle)
-from eyeglow_egobody.model.recording import synthetic_recording
+                               QMessageBox,QDialog,QStyle,QFileDialog,QTextEdit)
+from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
+from eyeglow_egobody.runtime_paths import default_models
 from eyeglow_egobody.controller import Controller
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
 
 class MainWindow(QMainWindow):
-    def __init__(self, output_root):
+    def __init__(self, output_root, dataset=None, model_dir=None):
         super().__init__()
-        self.setWindowTitle('EyeGlow EgoBody — Phase 1 synthetic prototype')
+        self.setWindowTitle('EyeGlow EgoBody — Paired motion playback')
+        self.dataset = dataset
+        self.model_dir = model_dir or default_models()
+        self.infos = []
         self.resize(1200,840)
         self._export_size_limits = None
         root = QWidget()
         layout = QVBoxLayout(root)
-        title = QLabel('EyeGlow EgoBody · Synthetic technical spike')
+        title = QLabel('EyeGlow EgoBody · Paired motion playback')
         title.setStyleSheet('font-size: 21px; font-weight: bold; padding: 8px')
         layout.addWidget(title)
-        layout.addWidget(QLabel('Placeholder glasses and frustums · No real recordings or visibility analysis'))
-        recording = synthetic_recording()
+        layout.addWidget(QLabel('Placeholder glasses and frustums · No visibility analysis'))
+        browser = QHBoxLayout()
+        self.recordings = QComboBox()
+        self.recordings.setMinimumContentsLength(35)
+        browser.addWidget(self.recordings,1)
+        self.load_button = QPushButton('Load recording')
+        self.models_button = QPushButton('SMPL-X model folder…')
+        self.diagnostics_button = QPushButton('Diagnostics…')
+        for widget in (self.load_button,self.models_button,self.diagnostics_button):
+            browser.addWidget(widget)
+        layout.addLayout(browser)
+        self.metadata_label = QLabel('Discovering recordings…' if dataset else 'Synthetic fixture · invented motion')
+        self.metadata_label.setWordWrap(True)
+        self.metadata_label.setTextFormat(Qt.TextFormat.PlainText)
+        layout.addWidget(self.metadata_label)
+        recording = (Recording(np.array([0.]), np.zeros((2,1,16,3)),
+                               np.tile(np.eye(4),(2,1,1,1)), name='No recording loaded',
+                               valid=np.zeros((2,1),dtype=bool)) if dataset else synthetic_recording())
         self.viewport = Viewport(root,recording)
         layout.addWidget(self.viewport.interactor,1)
         self.controller = Controller(recording,self.viewport,output_root,self)
@@ -112,11 +135,65 @@ class MainWindow(QMainWindow):
         self.cancel.setVisible(False)
         layout.addWidget(self.cancel)
         self.setCentralWidget(root)
+        self.load_button.clicked.connect(self.load_selected)
+        self.models_button.clicked.connect(self.choose_models)
+        self.diagnostics_button.clicked.connect(self.show_diagnostics)
+        self.recordings.currentIndexChanged.connect(self.describe_selected)
+        self.controller.recordings_found.connect(self.found_recordings)
+        self.controller.load_failed.connect(self.metadata_label.setText)
+        self.controller.loading_changed.connect(self.sync)
         self.controller.changed.connect(self.sync)
         self.controller.status.connect(self.statusBar().showMessage)
         self.controller.export_failed.connect(lambda message: QMessageBox.warning(self, 'Export failed', message))
         self.statusBar().showMessage('Choose where to save each screenshot or video.')
         self.sync()
+        if dataset:
+            self.controller.discover_recordings(dataset)
+
+    def found_recordings(self, infos):
+        self.infos = infos
+        self.recordings.clear()
+        for info in infos:
+            self.recordings.addItem(f'{info.name} · {info.split}', info)
+        if infos:
+            self.load_selected()
+        else:
+            self.metadata_label.setText('No matching camera-wearer/interactee SMPL-X recording directories found.')
+
+    def describe_selected(self):
+        info = self.recordings.currentData()
+        if info:
+            self.metadata_label.setText(
+                f'{info.scene} · source frames {info.start}–{info.end} · 30 Hz Kinect cadence · '
+                f'A: wearer/body {info.body_indices[0]} · B: interactee/body {info.body_indices[1]} · '
+                'Select Load recording to validate paired frames.')
+
+    def load_selected(self):
+        info = self.recordings.currentData()
+        if info:
+            self.controller.load_recording(info, self.model_dir)
+
+    def choose_models(self):
+        folder = QFileDialog.getExistingDirectory(self, 'Folder containing SMPLX_MALE.npz / SMPLX_FEMALE.npz', str(self.model_dir))
+        if folder:
+            self.model_dir = Path(folder)
+            self.load_selected()
+
+    def show_diagnostics(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle('Recording and placement diagnostics')
+        dialog.resize(760,560)
+        layout = QVBoxLayout(dialog)
+        text = QTextEdit()
+        text.setReadOnly(True)
+        recording, frame = self.controller.recording, self.controller.state.frame
+        diagnostics = {**recording.metadata, 'current_source_frame': int(recording.frame_ids[frame]),
+                       'current_valid': recording.valid[:,frame].tolist(),
+                       'current_pelvis_m': recording.joints[:,frame,0].tolist(),
+                       'current_head_transforms': recording.heads[:,frame].tolist()}
+        text.setPlainText(json.dumps(diagnostics, indent=2))
+        layout.addWidget(text)
+        dialog.exec()
 
     def choose_export(self, video):
         controller = self.controller
@@ -149,8 +226,16 @@ class MainWindow(QMainWindow):
     def sync(self):
         state = self.controller.state
         with QSignalBlocker(self.slider):
+            self.slider.setRange(0,state.frame_count-1)
             self.slider.setValue(state.frame)
-        self.counter.setText(f'{state.frame+1} / {state.frame_count}')
+        recording = self.controller.recording
+        self.counter.setText(f'{state.frame+1} / {state.frame_count} · '
+                             f'{recording.timestamps[state.frame]:.2f} s · ID {recording.frame_ids[state.frame]}')
+        if recording.metadata and getattr(self, "_described_recording", None) is not recording:
+            self.metadata_label.setText(f'{recording.name} · {recording.metadata["scene"]} · '
+                                       f'{recording.metadata["paired_frames"]}/{recording.frame_count} paired valid · '
+                                       f'{recording.fps:g} Hz · {recording.metadata["cache_status"]}')
+            self._described_recording = recording
         self.play.setIcon(self._pause_icon if state.playing else self._play_icon)
         self.play.setAccessibleName('Pause' if state.playing else 'Play')
         busy = self.controller.job is not None
@@ -162,9 +247,14 @@ class MainWindow(QMainWindow):
             self.setMinimumSize(minimum)
             self.setMaximumSize(maximum)
             self._export_size_limits = None
-        self.controls.setEnabled(not busy)
-        self.screenshot_action.setEnabled(not busy)
-        self.video_action.setEnabled(not busy)
+        loading = self.controller.loading is not None
+        usable = bool(recording.valid.any())
+        self.load_button.setEnabled(not busy and not loading and bool(self.infos))
+        self.recordings.setEnabled(not busy and not loading)
+        self.models_button.setEnabled(not busy and not loading)
+        self.controls.setEnabled(not busy and not loading and usable)
+        self.screenshot_action.setEnabled(not busy and not loading and usable)
+        self.video_action.setEnabled(not busy and not loading and usable)
         self.viewport.setEnabled(not busy)
         self.cancel.setVisible(busy)
 

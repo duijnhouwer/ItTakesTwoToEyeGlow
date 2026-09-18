@@ -1,4 +1,4 @@
-from concurrent.futures import CancelledError
+from concurrent.futures import CancelledError, ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
@@ -13,6 +13,9 @@ from eyeglow_egobody.export.paths import safe_destination
 
 class Controller(QObject):
     changed = Signal()
+    recordings_found = Signal(object)
+    loading_changed = Signal()
+    load_failed = Signal(str)
     status = Signal(str)
     export_finished = Signal(str)
     export_failed = Signal(str)
@@ -29,24 +32,85 @@ class Controller(QObject):
         self.orbit_suspended = False
         self.writer = ImageWriter()
         self.job = None
+        self.load_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="egobody")
+        self.loading = None
+        self.load_cancel = Event()
+        self.load_generation = 0
         self.last = monotonic()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(16)
+
+    def discover_recordings(self, dataset):
+        from eyeglow_egobody.egobody.discovery import discover
+        self._submit_load('discovery', discover, dataset)
+
+    def load_recording(self, info, model_dir):
+        from eyeglow_egobody.egobody.loading import load_recording
+        self._submit_load('recording', load_recording, info, model_dir)
+
+    def _submit_load(self, kind, function, *args):
+        if self.job:
+            return
+        self.load_cancel.set()
+        if self.loading:
+            self.loading[1].cancel()
+        self.load_cancel = Event()
+        self.load_generation += 1
+        self.state.playing = False
+        kwargs = {'cancelled': self.load_cancel} if kind == 'recording' else {}
+        self.loading = (kind, self.load_pool.submit(function, *args, **kwargs), self.load_generation)
+        self.status.emit('Discovering recordings…' if kind == 'discovery' else 'Loading and validating paired motion…')
+        self.loading_changed.emit()
+        self.changed.emit()
+
+    def _poll_load(self):
+        if not self.loading or not self.loading[1].done():
+            return
+        kind, future, generation = self.loading
+        self.loading = None
+        try:
+            result = future.result()
+            if generation != self.load_generation:
+                return
+            if kind == 'discovery':
+                self.recordings_found.emit(result)
+            else:
+                self.set_recording(result)
+                self.status.emit(f'Loaded {result.name} · {result.metadata.get("cache_status", "")}')
+        except CancelledError:
+            pass
+        except Exception as exc:
+            self.status.emit(str(exc))
+            self.load_failed.emit(str(exc))
+        finally:
+            self.loading_changed.emit()
+            self.changed.emit()
+
+    def set_recording(self, recording):
+        if self.job:
+            return
+        speed, loop = self.state.speed, self.state.loop
+        self.viewport.set_recording(recording)
+        self.recording = recording
+        self.state = PlaybackState(recording.frame_count, recording.fps, speed=speed, loop=loop)
+        self.export_start, self.export_end = 0, recording.frame_count-1
+        self.last = monotonic()
+        self.refresh()
 
     def refresh(self):
         self.viewport.set_frame(self.state.frame, self.spread)
         self.changed.emit()
 
     def seek(self, frame):
-        if self.job:
+        if self.job or self.loading:
             return
         self.state.seek(frame)
         self.last = monotonic()
         self.refresh()
 
     def toggle(self):
-        if not self.job:
+        if not self.job and not self.loading:
             self.state.playing = not self.state.playing
             self.last = monotonic()
             self.changed.emit()
@@ -72,6 +136,7 @@ class Controller(QObject):
             self.changed.emit()
 
     def tick(self):
+        self._poll_load()
         now = monotonic()
         elapsed, self.last = now-self.last, now
         if self.job:
@@ -97,7 +162,7 @@ class Controller(QObject):
         self._start_export(destination, True, overwrite, settings)
 
     def _start_export(self, destination, video, overwrite, settings=None):
-        if self.job:
+        if self.job or self.loading or not self.recording.valid.any():
             return
         try:
             destination = safe_destination(destination)
@@ -192,6 +257,9 @@ class Controller(QObject):
 
     def close(self):
         self.timer.stop()
+        self.load_cancel.set()
+        self.load_generation += 1
+        self.load_pool.shutdown(wait=False, cancel_futures=True)
         self.cancel_export()
         self.writer.close()
         if self.job:

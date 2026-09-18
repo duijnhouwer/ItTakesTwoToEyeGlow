@@ -13,7 +13,7 @@ Work does not begin on the next implementation phase until both agree that the
 current phase's completion criteria have been met, or explicitly agree to carry
 a documented issue forward.
 
-The source dataset at `../egobody-data` is read-only throughout every phase.
+The source dataset at `../assets/egobody-data` is read-only throughout every phase.
 All caches, indexes, logs, test outputs, screenshots, and exports must be written
 outside that directory.
 
@@ -403,7 +403,112 @@ opportunity as actual perception.
 Both testers agree that the complete analysis workflow is coherent, synchronized,
 and understandable.
 
-## Phase 7 — Complete Export Workflow
+## Phase 7 — Activity Filtering, Selection, and Reporting
+
+### Rationale
+
+The project owner wants to report potential EyeGlow visibility during selected
+activities, for example casual conversation, and isolate or combine activities
+without selecting from 147 raw activity names individually. Design the selection
+interface together before implementing it, once the visibility and timeline
+workflow is available.
+
+### Annotation evidence and starting proposal
+
+The read-only source is
+`../assets/egobody-data/Motion-X-main/mocap-dataset-process/egobody_description_all.csv`.
+The inspected file contains 980 participant-specific intervals across all 125
+recordings and both participants: 147 distinct activity names after removing
+`_clip<number>` suffixes, or 146 after normalizing spaces and underscores.
+Fifteen of the 250 participant tracks have gaps in interval coverage; an activity
+label must not be silently carried through an unlabeled interval.
+
+The EgoBody paper describes cooperation, social exchange, conflict, conformity,
+and others ([Table 2](https://www.ecva.net/papers/eccv_2022/papers_ECCV/papers/136660176.pdf#page=6)).
+The local CSV supplies no mapping from activity labels to these categories.
+The following six groups are a **proposed application grouping**, not an official
+EgoBody taxonomy or an approved exhaustive mapping:
+
+| Proposed activity group | Example labels / activities |
+|---|---|
+| Conversation | `casual_chat`, `stand_casual_chat`, seated-chat variants |
+| Teaching / learning | teaching, learning, instructing, attending class |
+| Dance | `dance`, `teach_dance`, `learn_to_dance` |
+| Exercise | stretching, squatting, jumping jacks, Tai Chi |
+| Object interaction | passing, catching, tossing, taking objects |
+| Acting / guessing | performing actions, drawing with hands, guessing |
+
+Preserve these proposals for the design discussion. Groups may overlap:
+`teach_dance`, for example, can belong to both Teaching / learning and Dance.
+Keep original labels available. Consider posture (sitting/standing/walking) and
+location as separate selection dimensions rather than multiplying activity groups.
+Ambiguous labels and labels not yet mapped to a group must remain visible.
+
+### Interface and semantics decisions — before implementation
+
+- Review alternatives for searchable label selection, group checkboxes with
+  expandable members, custom combinations, and saved selection presets. Agree on
+  the interface with the project owner before building it.
+- Review the six proposed groups and their exact label membership; decide how to
+  handle spelling variants, compound activities, overlaps, and unmapped labels.
+- Decide whose annotation selects an interval: the viewer, the EyeGlow emitter,
+  either participant, or both. Define this explicitly for each visibility direction;
+  camera wearer/interactee identity remains separate from viewer/emitter role.
+- Decide union versus intersection behavior for combined selections, and whether
+  the first implementation aggregates within one recording or across recordings.
+- Resolve shared annotation endpoints and missing labels; define how selections
+  appear on the timeline and whether they affect playback navigation.
+- Agree on the report wording and denominator: potential visibility during valid
+  selected time, accompanied by selected duration, usable duration, recording
+  count, and excluded/unlabeled time where relevant.
+
+### Implementation goal
+
+Implement the agreed interface and selection semantics as one testable increment:
+
+- Load participant/frame-range annotations without modifying the source CSV.
+- Keep a versioned, inspectable mapping from original labels to normalized labels
+  and application groups, stored outside the dataset.
+- Select individual labels, groups, and user-defined combinations; retain the
+  exact selection and grouping version so reported results can be reproduced.
+- Apply selection masks consistently to the timeline and visibility summaries.
+  Use duration-weighted aggregation; do not average clip percentages or double
+  count time that matches overlapping groups. Do not join visibility events
+  across excluded intervals or recording boundaries.
+- Provide clear empty-selection, no-match, invalid-data, and unlabeled feedback.
+
+### Completion criteria
+
+- The project owner has agreed to the interface, group membership, participant
+  semantics, and aggregation scope before implementation.
+- Conversation variants can be selected together; individual labels can still
+  be isolated and groups combined without counting an interval twice.
+- Every filtered result identifies the activity selection, direction/participant
+  rule, denominator, and included recordings. Original labels remain traceable.
+- Filtered intervals and reported results agree with hand-checked examples.
+
+## Test Phase 7 — Activity Selection and Reporting Review
+
+### Developer tests
+
+Test source participant identity and frame alignment, label normalization, group
+membership, overlapping selections, union/intersection rules, annotation gaps and
+shared boundaries. Verify duration-weighted denominators, empty results, event
+boundaries, and multi-recording aggregation if included in the agreed scope.
+
+### Joint hands-on test
+
+Build a Conversation selection, isolate one label, combine Dance with Teaching /
+learning, and inspect the selected timeline intervals and resulting report.
+Review cases where the two participants have different activities. Confirm that
+the selection is understandable and that its exact membership can be recovered.
+
+### Gate to Phase 8
+
+Both testers agree that activity selection and filtered visibility reports are
+understandable, reproducible, and numerically consistent with the selected time.
+
+## Phase 8 — Complete Export Workflow
 
 ### Rationale
 
@@ -426,7 +531,7 @@ settled, so cross-platform validation can exercise the complete workflow.
 - Progress reporting remains responsive; cancellation preserves existing output.
 - Outputs and temporary files remain outside the source dataset.
 
-## Test Phase 7 — Export Review
+## Test Phase 8 — Export Review
 
 ### Developer tests
 
@@ -439,12 +544,12 @@ settled, so cross-platform validation can exercise the complete workflow.
 Export stills and videos from a representative recording, inspect the results,
 and review the settings, progress, cancellation, and error experience.
 
-### Gate to Phase 8
+### Gate to Phase 9
 
 Both testers agree that the complete Linux workflow and exports are ready for
 native packaging and validation on the other target platforms.
 
-## Phase 8 — Cross-Platform Packaging and Validation
+## Phase 9 — Cross-Platform Packaging and Validation
 
 ### Rationale
 
@@ -484,7 +589,7 @@ additional MVP target platforms:
 - Any unsupported behavior is documented and does not conflict with the MVP
   acceptance criteria.
 
-## Test Phase 8 — Cross-Platform Deployment Review
+## Test Phase 9 — Cross-Platform Deployment Review
 
 ### Developer tests
 
@@ -506,14 +611,14 @@ Together, review the Windows 11 and Apple Silicon macOS builds using the same
 core workflow approved on Linux. Compare behavior and record platform-specific
 differences rather than accepting silent divergence.
 
-### Gate to Phase 9
+### Gate to Phase 10
 
 Both testers agree that the application can be built, launched, and exercised as
 a standalone package on Linux, Windows 11 x64, and recent Apple Silicon macOS.
 Any platform issue that blocks the core workflow is resolved before final
 polishing begins.
 
-## Phase 9 — Final Polishing and MVP Acceptance
+## Phase 10 — Final Polishing and MVP Acceptance
 
 ### Rationale
 
@@ -539,7 +644,7 @@ account for the behavior of all supported systems.
   explicitly agreed disposition.
 - Remaining limitations are documented and accepted as non-blocking.
 
-## Test Phase 9 — Final MVP Acceptance Test
+## Test Phase 10 — Final MVP Acceptance Test
 
 ### Developer tests
 
@@ -569,14 +674,15 @@ implementation stopped; approval follows the corresponding joint test phase.
 | Phase | Developer test | Joint test | Approved to proceed | Notes |
 |---|---|---|---|---|
 | 1 — Technical spike | Passed on Linux | Pending | No | Implementation and one-folder package ready; see [validation record](docs/PHASE1_VALIDATION.md). |
-| 2 — EgoBody inspection and playback | Not run | Not run | No | Inspect data and replace synthetic playback with a real paired recording. |
+| 2 — EgoBody inspection and playback | Automated and real-playback checks passed | Pending | No | Supplied v1.1 models connected; 1,290- and 760-frame recordings loaded. See [inspection and validation](docs/PHASE2_DATA_INSPECTION.md). |
 | 3 — Analysis engine | Not run | Not run | No | |
 | 4 — Optical rendering | Not run | Not run | No | |
 | 5 — Integrated visibility | Not run | Not run | No | |
 | 6 — Timeline and UX | Not run | Not run | No | |
-| 7 — Export workflow | Not run | Not run | No | Builds on Phase 1 export refinements. |
-| 8 — Cross-platform packaging | Not run | Not run | No | Deferred until the complete Linux workflow is ready. |
-| 9 — Final polishing and MVP | Not run | Not run | No | |
+| 7 — Activity filtering and reporting | Not run | Not run | No | Interface and mapping decisions first; six proposed groups recorded above. |
+| 8 — Export workflow | Not run | Not run | No | Builds on Phase 1 export refinements. |
+| 9 — Cross-platform packaging | Not run | Not run | No | Deferred until the complete Linux workflow is ready. |
+| 10 — Final polishing and MVP | Not run | Not run | No | |
 
 ## Scope-Change Rule
 
@@ -587,6 +693,9 @@ deferral. This keeps the plan useful as evidence of decisions rather than treati
 it as an immutable schedule.
 
 ## Authorized Phase 1 export refinement
+
+Historical phase numbers in the following decision records reflect the plan at
+the time; the activity-selection addition below supplies the current numbering.
 
 After the initial spike, the project owner requested visible save dialogs for
 screenshots and video, an inclusive two-handle export-range bar below playback,
@@ -626,3 +735,16 @@ moving to Phase 3. The immediate deliverable is evidence of how EgoBody data is
 organized and a real two-person recording replacing the synthetic demo in the
 viewport. This reorder does not require visibility scores in Phase 2 or change
 Phases 4–9.
+
+
+## Authorized activity-selection phase — 2026-09-18
+
+The project owner requested a separate phase to decide on an interface for
+filtering/selecting activities and to preserve the six proposed activity groups.
+This adds Phase 7 after the main timeline/score experience. Export completion,
+cross-platform packaging, and final polishing move to Phases 8, 9, and 10.
+Phases 1–6 retain their scope and numbering. This is an authorized addition to
+the plan for activity-specific visibility reporting; it does not authorize
+starting later-phase implementation now or approve the proposed group mapping.
+The existing MVP visibility criteria remain in force; the selection and reporting
+criteria above extend them with explicit activity scope and reproducibility.

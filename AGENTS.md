@@ -11,7 +11,7 @@
 
 ## Dataset protection
 
-- Treat `/home/jacob/Documents/EyeGlowEgoBody/egobody-data` as strictly read-only.
+- Treat `/home/jacob/Documents/EyeGlowEgoBody/assets/egobody-data` as strictly read-only.
 - Do not create, modify, move, rename, or delete anything inside that directory.
 - Read and analyze files there only. Write derived artifacts, caches, logs, and generated outputs elsewhere, such as `/home/jacob/Documents/EyeGlowEgoBody/code-repo`.
 - If a requested operation appears to require changing the dataset, stop and ask the user before proceeding.

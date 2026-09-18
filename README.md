@@ -1,8 +1,11 @@
 # EyeGlow EgoBody
 
-Phase 1 is a Python desktop technical spike: two synthetic participants, head-locked
-placeholder glasses/frustums, playback, camera navigation, screenshot saving, and MP4 video export.
-**It does not load EgoBody recordings or calculate visibility.**
+The desktop now discovers paired EgoBody SMPL-X recordings and loads them in a
+background worker for synchronized skeleton playback. Licensed SMPL-X model NPZ files are loaded by default from
+`../assets/models_smplx_v1_1/models/smplx`. The dataset contains fitted motion
+parameters; the separate model assets reconstruct the skeleton. Visibility analysis is a later phase.
+
+See [Phase 2 data inspection and validation](docs/PHASE2_DATA_INSPECTION.md).
 
 ## Run from source
 
@@ -16,8 +19,13 @@ python3.12 -m venv .venv
 ```
 
 Qt Widgets are supplied by `PySide6-Essentials`; unused Qt Addons are omitted.
-The desktop requires a working display and OpenGL driver. No dataset or model
-assets are required. Windows and macOS deployment are Phase 8, before final polishing in Phase 9, and are not yet validated.
+The desktop requires a working display and OpenGL driver. It defaults to the
+`../assets/egobody-data` directory. Supply `--model-dir /path/to/smplx-models`
+(containing `SMPLX_FEMALE.npz` and `SMPLX_MALE.npz`) or use **SMPL-X model folder…**.
+`EYEGLOW_MODEL_DIR` also sets the model folder. `--dataset` selects another dataset.
+Choose a recording and press **Load recording**; **Diagnostics…** shows validity,
+coordinates, source identity, and approximations. Caches stay under `.runtime/`.
+Use `--synthetic` to run the deterministic demo without data or models. Windows and macOS deployment are Phase 9, before final polishing in Phase 10, and are not yet validated.
 
 ## Try the prototype
 
@@ -94,12 +102,14 @@ The project follows [ARCHITECTURE.md](ARCHITECTURE.md),
 
 ## Implementation boundaries
 
-`model/` contains NumPy-only synthetic motion and playback state. `controller.py`
+`model/` contains NumPy-only normalized recordings, synthetic fixtures, and playback state. `controller.py`
 owns session state; `ui/` forwards controls; `rendering/` owns persistent VTK actors;
 `export/` writes screenshots and streams RGB video frames through a bounded
 background worker into a separate FFmpeg process. Rendering and
-capture stay on the Qt thread. `analysis/` and `egobody/` reserve the later-phase
-package boundaries. All synthetic head frames and shapes are approximations.
+capture stay on the Qt thread. `egobody/` handles read-only discovery, skeleton
+reconstruction, calibration, and versioned caching without Qt/VTK dependencies.
+`analysis/` reserves the later visibility phase. Placeholder optical placement is
+an approximation for both real and synthetic motion.
 
 The integration follows the upstream [PyVistaQt usage guide](https://qt.pyvista.org/usage.html)
 and [PyVista packaging guidance](https://docs.pyvista.org/extras/pyinstaller).

@@ -1,8 +1,9 @@
 """All application output paths pass through the dataset guard."""
 from pathlib import Path
 from uuid import uuid4
+from eyeglow_egobody.runtime_paths import default_dataset
 
-DATASET = Path('/home/jacob/Documents/EyeGlowEgoBody/egobody-data')
+DATASET = default_dataset()
 
 def safe_directory(path):
     path = Path(path).expanduser().resolve()
