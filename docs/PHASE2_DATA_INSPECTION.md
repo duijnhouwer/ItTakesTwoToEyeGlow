@@ -119,10 +119,11 @@ with reconstructed bodies.
 - Placeholder optics now use reconstructed eye centers plus configurable radius
   and eye relief along head-forward (25 mm total by default). Frame dimensions
   remain placeholders; see the eye-placement update below.
-- The ground plane is placed at the second percentile of ankle/foot joint
-  heights over both people. This is a **joint-height floor proxy**, not a measured
-  sole contact plane; foot-center height and seated motion may bias it. It does
-  not alter motion coordinates.
+- The ground plane is placed at the minimum display-world Z over all reconstructed
+  body and eye joint centers, both people, and the full sequence. Invalid
+  participant frames and nonfinite positions are excluded. This is a joint-center
+  minimum, not a measured floor or body-surface minimum; a single low fitted joint
+  can determine it. It is fixed during playback and does not alter motion coordinates.
 - Diagnostics expose source IDs, per-person validity, current pelvis positions
   and head transforms, XYZ bounds, pelvis-separation range, role/body identity,
   transform matrices, source/model identity, errors, and every derivation above.
@@ -357,3 +358,20 @@ captures are in `.runtime/wayfarer/`.
 Frame-style validation: 78 tests passed, including rotated rear-plane clearance
 and live renderer updates. The rebuilt package passed stable-actor playback and
 PNG/FHD/4K/MP4 exports; report: `.runtime/wayfarer/package-smoke/smoke-result.json`.
+
+
+### Floor at the lowest joint — 2026-09-18
+
+Replaced the ankle/foot percentile proxy with the minimum finite display-world Z
+across all valid participant frames, including all 22 reconstructed body joints
+and both eye centers. The loading worker computes it once and stores it in
+`floor_proxy_z_m`; cache derivation v5 forces older caches to rebuild. Rendering
+continues to use the stored height, preserving the translucent floor and original
+motion coordinates. This is not a measured floor or a surface/sole-contact minimum.
+
+Validation: 83 automated tests passed, covering minima across either person,
+different frames/joints, eye centers, invalid frames, nonfinite positions, and
+cache persistence. The 1,290-frame real recording rebuilt successfully; the floor
+was -1.68041313 m, versus the prior percentile's -1.67204177 m (8.37 mm lower).
+The cached reload matched, and desktop inspection confirmed fixed floor height at
+frames 0, 430, and 1289. Captures/report: `.runtime/min-floor/`.

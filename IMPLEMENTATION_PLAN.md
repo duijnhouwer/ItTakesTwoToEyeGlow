@@ -780,3 +780,18 @@ The owner supplied a Wayfarer-style reference and requested white frames with
 that silhouette. This authorizes rounded trapezoid rim surfaces, a curved bridge,
 and tapered temples while retaining the current eye-relative placement and
 no-shadow rendering. Final optical geometry and analysis remain later work.
+
+
+### Authorized minimum-joint floor placement
+
+The owner requested the floor at the lowest finite reconstructed joint center
+across both people and the entire recording, including eyes, excluding invalid
+participant frames. This replaces the percentile proxy; the height is calculated
+once during loading, cached under the revised derivation version, and held fixed
+throughout playback. It changes the display floor only, not motion coordinates.
+
+Scene-mesh-based floor estimation is a possible later improvement, deferred by
+agreement with the owner. The minimum-joint rule remains in place for now, despite
+unsatisfactory placement in one reviewed example. Future investigation should
+account for arbitrary body postures, jumping, and low fitted-joint outliers;
+no new floor-estimation implementation is authorized by this deferral.

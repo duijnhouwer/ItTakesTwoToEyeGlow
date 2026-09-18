@@ -68,6 +68,7 @@ def test_pairing_normalization_cache_and_read_only(dataset):
     np.testing.assert_allclose(cold.timestamps,[0,1/30,2/30,3/30])
     hot = loading.load_recording(info, models)
     assert hot.metadata['cache_status'] == 'hit'
+    assert hot.metadata['floor_proxy_z_m'] == cold.metadata['floor_proxy_z_m'] == 2.0
     np.testing.assert_array_equal(hot.joints,cold.joints)
     cache, = loading.cache_directory(root).glob('*.npz')
     cache.write_bytes(b'broken cache')
@@ -293,3 +294,31 @@ def test_eye_centers_follow_head_and_survive_cache(dataset):
     arrays['eyes'][0,0,0] = np.nan
     np.savez_compressed(cache, **arrays)
     assert loading.load_recording(info, models).metadata['cache_status'] == 'rebuilt'
+
+
+@pytest.mark.parametrize('participant,frame,joint', [(0,0,0),(1,3,21),(0,2,15),(1,1,7)])
+def test_floor_uses_any_joint_participant_and_frame(participant,frame,joint):
+    joints = np.ones((2,4,22,3))
+    eyes = np.ones((2,4,2,3))
+    valid = np.ones((2,4),dtype=bool)
+    joints[participant,frame,joint,2] = -.4
+    assert loading.lowest_joint_height(joints,eyes,valid) == -.4
+
+
+def test_floor_includes_eyes_and_excludes_invalid_or_nonfinite_positions():
+    joints = np.ones((2,4,22,3))
+    eyes = np.ones((2,4,2,3))
+    valid = np.ones((2,4),dtype=bool)
+    valid[0,0] = False
+    joints[0,0,:,2] = -100
+    eyes[0,0,:,2] = -200
+    joints[0,1,0] = [np.nan,0,-300]
+    joints[0,1,1,2] = -np.inf
+    eyes[0,2,0] = [0,np.inf,-400]
+    eyes[1,3,1,2] = -.2
+    # A participant's valid frame contributes even when their partner is invalid.
+    valid[0,3] = False
+    assert loading.lowest_joint_height(joints,eyes,valid) == -.2
+    valid[:] = False
+    with pytest.raises(ValueError, match='No finite valid'):
+        loading.lowest_joint_height(joints,eyes,valid)

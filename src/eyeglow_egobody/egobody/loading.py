@@ -14,7 +14,7 @@ from .skeleton import BodyModel, BONES, model_path
 from eyeglow_egobody.runtime_paths import project_root
 
 PROJECT_ROOT = project_root()
-SCHEMA = 'smplx-body22-eyes23-24-expression-head15-scene-yup-to-zup-v4'
+SCHEMA = 'smplx-body22-eyes23-24-expression-head15-scene-yup-to-zup-min-floor-v5'
 SCENE_TO_DISPLAY = np.array([[1.,0,0,0],[0,0,-1,0],[0,1,0,0],[0,0,0,1]])
 
 
@@ -94,6 +94,18 @@ def validate_arrays(recording, info):
         raise ValueError('Nonfinite valid eye centers')
 
 
+def lowest_joint_height(joints, eyes, valid):
+    """Minimum display-world Z across all finite, valid body and eye centers."""
+    minimum = np.inf
+    for positions in (joints, eyes):
+        points = positions[valid].reshape(-1,3)
+        finite = points[np.isfinite(points).all(axis=1)]
+        minimum = min(minimum, float(np.min(finite[:,2], initial=np.inf)))
+    if not np.isfinite(minimum):
+        raise ValueError('No finite valid joint centers for floor placement')
+    return minimum
+
+
 def load_recording(info, model_dir, cancelled=None):
     def check():
         if cancelled is not None and cancelled.is_set():
@@ -156,7 +168,7 @@ def load_recording(info, model_dir, cancelled=None):
                     units='meters', coordinate_system='scene Y up converted to display Z up: (x,y,z) -> (x,-z,y)',
                     kinect_to_scene=scene_transform.tolist(), scene_to_display=SCENE_TO_DISPLAY.tolist(),
                     kinect_to_display=transform.tolist(),
-                    floor_proxy_z_m=float(np.nanpercentile(joints[:,:,[7,8,10,11],2],2)), cache_status='rebuilt',
+                    floor_proxy_z_m=lowest_joint_height(joints, eyes, valid), cache_status='rebuilt',
                     xyz_min=points.min(axis=0).tolist(), xyz_max=points.max(axis=0).tolist(),
                     pelvis_separation_m=[float(separation.min()),float(separation.max())],
                     derivations=['22 SMPL-X kinematic body joint centers; no surface vertices',
@@ -165,7 +177,7 @@ def load_recording(info, model_dir, cancelled=None):
                                  'Head orientation from fitted body chain to joint 15, not eye tracking',
                                  'Eye centers reconstructed from SMPL-X joints 23/24; fitted anatomy, not measured gaze',
                                  'Lens rear planes offset from eye centers by configured eyeball radius plus eye relief along head forward; placeholder frames',
-                                 'Ground plane: 2nd percentile ankle/foot joint height, not measured floor; no motion recentering'])
+                                 'Ground plane: minimum finite joint-center Z across all valid participant frames, including eyes; not measured floor or body-surface minimum; no motion recentering'])
     recording = Recording(np.arange(n)/30., np.ascontiguousarray(joints), np.ascontiguousarray(heads),
                           30., info.name, valid, np.arange(info.start,info.end+1), BONES, metadata, np.ascontiguousarray(eyes))
     validate_arrays(recording, info)
