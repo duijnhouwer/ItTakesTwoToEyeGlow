@@ -63,6 +63,15 @@ Temporary output is removed after completion, cancellation, or failure. The synt
 Dataset paths and symlinks into them are rejected. `--output-dir` selects the
 output directory for automated smoke tests, not the interactive save dialogs.
 
+## Linux window decoration
+
+On GNOME/Wayland the app uses a bundled Adwaita-style decoration with an external
+shadow around the active floating window. Maximized and tiled windows omit the
+shadow. Other desktops and operating systems retain native decorations.
+The plugin matches the exact Qt version; rebuilding instructions and its LGPL
+source/license are in [third_party/qadwaitadecorations](third_party/qadwaitadecorations/README.md).
+Set `QT_WAYLAND_DECORATION=adwaita` when launching to use Qt's original decoration.
+
 ## Verify and package on Linux
 
 ```bash

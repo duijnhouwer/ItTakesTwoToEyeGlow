@@ -15,6 +15,8 @@ def main():
     from PySide6.QtWidgets import QApplication
     from eyeglow_egobody.export.paths import safe_directory
     from eyeglow_egobody.ui.main_window import MainWindow
+    from eyeglow_egobody.ui.window_decoration import configure_window_decoration
+    configure_window_decoration()
     app = QApplication(sys.argv[:1])
     app.setOrganizationName('EyeGlow')
     app.setApplicationName('EyeGlowEgoBody')

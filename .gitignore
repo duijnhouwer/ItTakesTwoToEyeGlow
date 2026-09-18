@@ -222,3 +222,6 @@ __marimo__/
 exports/
 .venv/
 !eyeglow.spec
+
+# Version-matched Linux window decoration distributed with the app
+!src/eyeglow_egobody/resources/qt_plugins/6.11.2/linux-x86_64/wayland-decoration-client/libqadwaitadecorations.so
