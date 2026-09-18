@@ -215,6 +215,16 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 - Duration-weighted scores and event detection for uniform and irregular
   timestamps.
 - Numeric diagnostic outputs sufficient to explain why a test passed or failed.
+- Independently addressable left/right expander windows, frustums, UI lines, and
+  local coordinate axes rendered directly from the shared analysis geometry.
+- Monocular-left, monocular-right, and binocular rendering, with immediate
+  current-frame updates from the Waveguide settings (dimensions, offsets, FOV,
+  UI-line angles, and maximum distance).
+- Frustum opacity and geometry/diagnostic visibility controls for inspection.
+- Current-frame receiver-eye markers and bidirectional pass/fail diagnostics for
+  containment, distance, facing, and validity, evaluated by the shared engine.
+  This visual review includes loaded recordings; whole-recording scores and
+  timeline integration remain in Phase 5.
 
 ### Completion criteria
 
@@ -225,6 +235,10 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
   orientation-rejected, distance-rejected, and invalid-data cases.
 - Summary percentages, simultaneous visibility, event counts, and longest events
   match hand-calculated expectations.
+- Rendered frustum corners match numeric geometry; windows, UI lines, and
+  frustums stay head-locked and settings affect both participants consistently.
+- Visible receiver-eye results and diagnostic explanations agree with the
+  current-frame engine output, making mathematical review possible in the app.
 
 ## Test Phase 3 — Mathematical Validation
 
@@ -235,13 +249,15 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 - Add invariance checks for rigid transforms and participant swapping where
   applicable.
 - Check numerical behavior at exact angular, distance, and frustum boundaries.
+- Compare rendered points with numeric fixtures, test display modes and parameter
+  changes, and verify actor reuse and current-frame diagnostic consistency.
 
 ### Joint hands-on test
 
-Review a small set of illustrated or printed synthetic scenarios and compare the
-expected result with the engine output. Agree on ambiguous conventions such as
-boundary inclusion and positive azimuth/elevation before visibility analysis is applied
-to the real recordings loaded in Phase 2.
+Inspect synthetic scenarios and loaded recordings in the actual viewport. Change
+waveguide settings and inspect the windows, frustums, UI lines, and receiving eye
+markers alongside pass/fail explanations. Agree on boundary inclusion, positive
+azimuth/elevation, and the volume convention before signing off the mathematics.
 
 ### Gate to Phase 4
 
@@ -259,25 +275,18 @@ of visibility.
 
 ### Implementation goal
 
-Replace placeholder optics with final MVP rendering:
+Finish optical presentation on top of the shared-geometry rendering delivered in
+Phase 3:
 
 - Recognizable generic glasses with bridge, frames, lenses, and fixed visual
   pantoscopic tilt of 5 degrees.
-- Independently addressable left and right rectangular waveguides.
-- Rendered frustums generated from analysis geometry.
-- UI-line and coordinate-frame diagnostics.
-- Monocular-left, monocular-right, and binocular display modes.
-- Controls using the shared waveguide size/offset, diagonal FOV and H/V ratio, UI-line azimuth/elevation,
-  maximum distance, opacity, visibility toggles, and reset to defaults.
-- Immediate current-frame geometry updates when parameters change.
 - Render-camera containment that turns each waveguide white independently when
   the camera lies inside its frustum; this remains unscored.
 
 ### Completion criteria
 
 - Glasses, waveguides, rays, and frustums remain head-locked throughout playback.
-- Rendered frustum corners agree numerically with the analysis engine.
-- All shared optical controls affect both participants consistently.
+- Final styling preserves the shared analysis geometry validated in Phase 3.
 - Camera containment changes only visual waveguide state and never participant
   scores.
 
@@ -285,16 +294,15 @@ Replace placeholder optics with final MVP rendering:
 
 ### Developer tests
 
-- Compare actor geometry with known numeric frustum fixtures.
-- Test all display modes and parameter limits.
+- Verify final glasses styling preserves validated optical placement.
 - Verify independent left/right camera containment.
 - Stress playback and repeated parameter changes for leaks or stale actors.
 
 ### Joint hands-on test
 
-Inspect the glasses from several camera angles, exercise every optical control,
-toggle diagnostics, and deliberately move the camera into and out of individual
-frustums. Confirm that the visualization explains the underlying geometry.
+Inspect final glasses styling from several camera angles and deliberately move
+the camera into and out of individual frustums to verify independent waveguide
+color changes. Shared-geometry and visibility review now belongs to Phase 3.
 
 ### Gate to Phase 5
 
@@ -823,3 +831,15 @@ The Phase 3 numeric implementation and automated tests are ready for review.
 See [Phase 3 conventions and synthetic scenarios](docs/PHASE3_VALIDATION.md).
 This does not mark the joint test complete or begin Phase 4 rendering / Phase 5
 real-recording score integration.
+
+## Authorized visual validation moved into Phase 3 — 2026-09-18
+
+The owner cannot approve visibility mathematics while the viewport still shows
+Phase 2 placeholder frustums. Move shared-geometry windows/frustums, UI lines,
+coordinate axes, display modes, immediate settings updates, and inspection
+controls from Phase 4 into Phase 3. Add current-frame receiving-eye results and
+pass/fail diagnostics so the owner can inspect potential visibility directly.
+Phase 3 remains unsigned until that review. Phase 4 retains final glasses styling
+and unscored render-camera containment; Phase 5 retains whole-recording analysis,
+summary scores, timeline integration, and background recalculation. This decision
+supersedes the earlier restriction to numeric-only Phase 3 validation.
