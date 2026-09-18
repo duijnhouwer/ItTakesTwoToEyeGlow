@@ -182,6 +182,14 @@ Both testers agree that the dataset organization and pairing are understood and
 that the application shows actual synchronized two-person motion. Known data
 and coordinate limitations are documented before beginning the analysis engine.
 
+> **Phase 2 complete**
+>
+> Concluded on 2026-09-18 04:56PM EDT with the project owner's explicit sign-off.
+> Recorded in the commit titled `Complete Phase 2 playback validation and sign-off`.
+> Developer validation: 87 tests passed, real-recording switching verified, and
+> standalone Linux playback/export smoke passed. The documented floor approximation
+> and deferred floor-estimation improvement carry forward. Approved to proceed to Phase 3.
+
 ## Phase 3 — Geometry and Visibility Analysis Engine
 
 ### Rationale
@@ -673,8 +681,8 @@ implementation stopped; approval follows the corresponding joint test phase.
 
 | Phase | Developer test | Joint test | Approved to proceed | Notes |
 |---|---|---|---|---|
-| 1 — Technical spike | Passed on Linux | Pending | No | Implementation and one-folder package ready; see [validation record](docs/PHASE1_VALIDATION.md). |
-| 2 — EgoBody inspection and playback | Automated and real-playback checks passed | Pending | No | Supplied v1.1 models connected; 1,290- and 760-frame recordings loaded. See [inspection and validation](docs/PHASE2_DATA_INSPECTION.md). |
+| 1 — Technical spike | Passed on Linux | Complete | Yes | Completed 2026-09-18; see Phase 1 completion note and [validation record](docs/PHASE1_VALIDATION.md). |
+| 2 — EgoBody inspection and playback | 87 tests and real-playback/package checks passed | Accepted by owner | Yes | Completed 2026-09-18 with explicit owner sign-off; documented floor limitation carried forward. See [inspection and validation](docs/PHASE2_DATA_INSPECTION.md). |
 | 3 — Analysis engine | Not run | Not run | No | |
 | 4 — Optical rendering | Not run | Not run | No | |
 | 5 — Integrated visibility | Not run | Not run | No | |

@@ -8,6 +8,7 @@ import os
 import pickle
 import tempfile
 import zipfile
+import zlib
 import numpy as np
 from eyeglow_egobody.model.recording import Recording
 from .skeleton import BodyModel, BONES, model_path
@@ -127,7 +128,7 @@ def load_recording(info, model_dir, cancelled=None):
         validate_arrays(recording, info)
         check()
         return replace(recording, metadata={**metadata, 'cache_status': 'hit'})
-    except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile):
+    except (OSError, ValueError, KeyError, EOFError, zipfile.BadZipFile, zlib.error):
         pass
     n = info.end-info.start+1
     joints = np.full((2,n,22,3), np.nan, dtype=np.float32)

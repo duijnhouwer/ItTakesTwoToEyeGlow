@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from threading import Event
 from time import monotonic
 import os
+import logging
 from PySide6.QtCore import QObject, QTimer, Signal
 from eyeglow_egobody.model.state import PlaybackState
 from eyeglow_egobody.model.export_settings import VideoSettings
@@ -81,6 +82,7 @@ class Controller(QObject):
         except CancelledError:
             pass
         except Exception as exc:
+            logging.getLogger(__name__).exception('%s loading failed', kind)
             self.status.emit(str(exc))
             self.load_failed.emit(str(exc))
         finally:

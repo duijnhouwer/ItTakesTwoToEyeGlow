@@ -2,7 +2,7 @@
 
 Updated 2026-09-18 after the owner supplied SMPL-X v1.1 assets and moved the
 dataset under `assets/`. **Real paired playback now passes developer checks;
-joint hands-on review and Phase 2 sign-off remain pending.** Earlier missing-asset
+the owner explicitly signed off Phase 2 on 2026-09-18.** Earlier missing-asset
 checks below document the initial implementation; see the final validation update
 for the current result.
 
@@ -391,3 +391,35 @@ Validation: 86 tests passed, including reset/save/cancel behavior, invalid facto
 values, preservation of factory metadata, and use of factory values independently
 of the earlier default field. Dialog layout inspected in
 `.runtime/factory-reset/settings.png`.
+
+### Recording-load decompression error — 2026-09-18
+
+The owner reported `Error -3 while decompressing data: incorrect header check`
+when selecting `recording_20211002_S17_S15_02`. A fresh source load reconstructed
+all 360 paired frames without invalid frames. All seven existing recording caches
+and all 1,885 modules in the current packaged Python archive decompressed
+successfully; the exact reported failure was not reproduced. A packaged process
+left running across an in-place rebuild is a possible cause, not a confirmed one.
+
+Fixed an independently verified recovery gap: a `zlib.error` while reading a
+derived cache now rebuilds it, like other cache corruption errors. A regression
+test damages an actual compressed array while preserving the ZIP directory,
+checks reconstruction and the subsequent cache hit, and verifies unchanged source
+data. Worker failures now log their full traceback to stderr for diagnosis.
+
+Validation: 87 tests passed. The loading controller switched from the 1,290-frame
+`recording_20210907_S02_S01_01` to the reported 360-frame recording and back.
+This remains Phase 2; the joint playback review and phase gate remain pending.
+The updated package is in `dist/EyeGlowEgoBody-loading-fix/`, separate from the
+existing build to avoid replacing files beneath an open application. Its desktop
+smoke test passed, including playback, PNG capture, and MP4 export; report:
+`.runtime/loading-fix/package-smoke-display/smoke-result.json`. Offscreen Qt could
+not create an OpenGL context, so this check used the desktop display.
+
+### Phase 2 sign-off — 2026-09-18
+
+The project owner confirmed Phase 2 complete after the playback and eye-placement
+review. This supersedes the pending-sign-off statements in the historical notes
+above. The documented minimum-joint floor approximation and deferred improvement
+carry forward. Phase 3 is approved to begin; no Phase 3 implementation is included
+in this completion record.

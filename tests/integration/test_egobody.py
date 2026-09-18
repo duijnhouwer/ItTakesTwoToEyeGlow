@@ -2,6 +2,9 @@
 import csv
 import json
 import pickle
+import struct
+import zipfile
+import zlib
 from pathlib import Path
 import numpy as np
 import pytest
@@ -94,6 +97,32 @@ def test_invalid_frame_and_cache_invalidation(dataset):
         assert loading.load_recording(info,models).metadata['source_key'] != second.metadata['source_key']
     finally:
         loading.SCHEMA = old
+
+
+def test_corrupt_compressed_cache_rebuilds(dataset):
+    root, models = dataset
+    before = snapshot(root)
+    info, = discover(root)
+    original = loading.load_recording(info, models)
+    cache, = loading.cache_directory(root).glob('*.npz')
+    with zipfile.ZipFile(cache) as archive:
+        member = archive.getinfo('joints.npy')
+        assert member.compress_type == zipfile.ZIP_DEFLATED
+    raw = bytearray(cache.read_bytes())
+    name_size, extra_size = struct.unpack_from('<HH', raw, member.header_offset + 26)
+    offset = member.header_offset + 30 + name_size + extra_size
+    # Invalid DEFLATE block type; retain the valid ZIP directory/header so
+    # reading an array, rather than opening the archive, raises zlib.error.
+    raw[offset] = 0x07
+    cache.write_bytes(raw)
+    with pytest.raises(zlib.error):
+        with np.load(cache, allow_pickle=False) as data:
+            data['joints']
+    rebuilt = loading.load_recording(info, models)
+    assert rebuilt.metadata['cache_status'] == 'rebuilt'
+    np.testing.assert_array_equal(rebuilt.joints, original.joints)
+    assert loading.load_recording(info, models).metadata['cache_status'] == 'hit'
+    assert snapshot(root) == before
 
 
 def test_missing_model_and_no_pairs_fail_honestly(dataset):
