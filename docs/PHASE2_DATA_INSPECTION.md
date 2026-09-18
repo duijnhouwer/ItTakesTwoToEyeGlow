@@ -375,3 +375,19 @@ cache persistence. The 1,290-frame real recording rebuilt successfully; the floo
 was -1.68041313 m, versus the prior percentile's -1.67204177 m (8.37 mm lower).
 The cached reload matched, and desktop inspection confirmed fixed floor height at
 frames 0, 430, and 1289. Captures/report: `.runtime/min-floor/`.
+
+### Factory Reset in settings — 2026-09-18
+
+Every parameter now includes an explicit validated `factory_default` in
+`config/settings_panel.json`: 12 mm for eyeball radius and 13 mm for eye relief.
+The Settings dialog's **Factory Reset** button fills every field from that
+parameter's factory value using its configured precision and clears validation
+errors. Reset is staged: Save persists/applies it, while Cancel leaves the current
+settings unchanged. Existing current values, including the owner's 30 mm radius
+adjustment, are preserved until Save. The earlier `default` metadata is retained;
+Factory Reset explicitly uses `factory_default`.
+
+Validation: 86 tests passed, including reset/save/cancel behavior, invalid factory
+values, preservation of factory metadata, and use of factory values independently
+of the earlier default field. Dialog layout inspected in
+`.runtime/factory-reset/settings.png`.

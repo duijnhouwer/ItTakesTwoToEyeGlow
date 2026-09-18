@@ -41,7 +41,7 @@ class PanelSettings:
                     or any(type(spec.get(k)) not in (int, float) or not math.isfinite(spec[k])
                            for k in ('min', 'max')) or spec['min'] > spec['max']):
                 raise ValueError(f'Invalid setting definition: {key}')
-            for field in ('value', 'default'):
+            for field in ('value', 'default', 'factory_default'):
                 validate_value(spec, spec.get(field))
         if specs['eyeball_radius_mm']['min'] <= 0 or specs['eye_relief_mm']['min'] < 0:
             raise ValueError('Eyeball radius must be positive and eye relief nonnegative')

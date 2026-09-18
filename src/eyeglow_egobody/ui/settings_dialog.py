@@ -27,9 +27,18 @@ class SettingsDialog(QDialog):
         self.error.setStyleSheet('color: #d9534f')
         layout.addWidget(self.error)
         self.buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        self.factory_reset = self.buttons.addButton('Factory Reset', QDialogButtonBox.ButtonRole.ResetRole)
+        self.factory_reset.setToolTip('Restore factory values in this dialog. Save to apply them.')
+        self.factory_reset.clicked.connect(self.reset_to_factory)
         self.buttons.accepted.connect(self.accept)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
+
+    def reset_to_factory(self):
+        for key, field in self.fields.items():
+            spec = self.store.document['settings'][key]
+            field.setText(f"{spec['factory_default']:.{spec['precision']}f}")
+        self.error.clear()
 
     def accept(self):
         values = {}

@@ -124,3 +124,41 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
     Viewport.set_frame(viewport, 120, .35)
     assert all(a.GetVisibility() for a in actors)
     assert tuple(viewport.stable_actors) == actors
+
+
+@pytest.mark.parametrize('save', [False, True])
+def test_factory_reset_is_staged_until_saved(qt_app, store, save):
+    store.save({'eyeball_radius_mm':30, 'eye_relief_mm':20})
+    before = store.path.read_bytes()
+    dialog = SettingsDialog(store)
+    dialog.fields['eye_relief_mm'].setText('invalid')
+    dialog.accept()
+    assert dialog.error.text()
+    dialog.factory_reset.click()
+    assert not dialog.error.text()
+    assert dialog.fields['eyeball_radius_mm'].text() == '12.0'
+    assert dialog.fields['eye_relief_mm'].text() == '13.0'
+    assert store.path.read_bytes() == before
+    assert dialog.result() == QDialog.DialogCode.Rejected
+    if save:
+        dialog.accept()
+        loaded = PanelSettings(store.path)
+        assert loaded.values == {'eyeball_radius_mm':12, 'eye_relief_mm':13}
+        assert loaded.document['settings']['eyeball_radius_mm']['factory_default'] == 12
+    else:
+        dialog.reject()
+        assert store.path.read_bytes() == before
+
+
+def test_factory_defaults_are_validated_and_distinct_from_default(qt_app, store):
+    document = json.loads(store.path.read_text())
+    document['settings']['eye_relief_mm']['default'] = 16
+    document['settings']['eye_relief_mm']['factory_default'] = 14.5
+    store.path.write_text(json.dumps(document))
+    dialog = SettingsDialog(PanelSettings(store.path))
+    dialog.factory_reset.click()
+    assert dialog.fields['eye_relief_mm'].text() == '14.5'
+    document['settings']['eye_relief_mm']['factory_default'] = 101
+    store.path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match='between'):
+        PanelSettings(store.path)

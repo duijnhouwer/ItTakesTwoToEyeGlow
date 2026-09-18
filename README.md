@@ -123,7 +123,10 @@ and uses the [imageio-ffmpeg bundled encoder](https://github.com/imageio/imageio
 (default 13 mm). Save persists changes to `config/settings_panel.json` and updates
 the current view. Cancel discards edits. The JSON also defines each setting's
 friendly display name, default, minimum, maximum, and decimal precision; only
-current values appear as editable fields in the dialog. Source and the current
+current values appear as editable fields in the dialog. Each parameter also has
+a `factory_default`: **Factory Reset** restores these values in the dialog
+(12 mm eyeball radius, 13 mm eye relief). Save applies and persists the reset;
+Cancel discards it. Source and the current
 repository-built package share this external file. Keep it with the repository.
 
 Participant-colored spheres mark reconstructed SMPL-X eye centers, using the
