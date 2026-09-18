@@ -1,10 +1,11 @@
 """Modal video options and shared native file-save selection."""
 from pathlib import Path
 import sys
-from PySide6.QtCore import QStandardPaths
+from PySide6.QtCore import QStandardPaths, Qt
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayout,
                                QFormLayout, QLineEdit, QPushButton, QSpinBox,
-                               QDoubleSpinBox, QComboBox, QLabel, QFileDialog, QMessageBox)
+                               QDoubleSpinBox, QComboBox, QLabel, QFileDialog, QMessageBox,
+                               QSlider, QAbstractSpinBox)
 from eyeglow_egobody.model.export_settings import VideoSettings
 from eyeglow_egobody.export.paths import safe_destination
 
@@ -78,7 +79,7 @@ class VideoExportDialog(QDialog):
         self.frame_size = QComboBox()
         self.frame_size.addItem('3840 × 2160 (4K)', (3840,2160))
         self.frame_size.addItem('1920 × 1080 (FHD)', (1920,1080))
-        self.frame_size.addItem(f'{current_size[0]} × {current_size[1]} (current)', tuple(current_size))
+        self.frame_size.addItem(f'{current_size[0]} × {current_size[1]} (Current UI display port)', tuple(current_size))
         self.frame_size.setCurrentIndex(2)
         self.frame_size.setToolTip('Scene pixels, excluding controls. Odd dimensions are padded by one pixel for MP4 compatibility.')
         form.addRow('Frame size', self.frame_size)
@@ -94,9 +95,22 @@ class VideoExportDialog(QDialog):
         form.addRow('Framerate (fps)', fps_row)
         self.quality = QSpinBox()
         self.quality.setRange(0,100)
-        self.quality.setValue(75)
+        self.quality.setValue(VideoSettings().quality)
+        self.quality.setSuffix('%')
+        self.quality.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.quality.setAccessibleName('Quality percentage')
+        self.quality_slider = QSlider(Qt.Orientation.Horizontal)
+        self.quality_slider.setRange(0,100)
+        self.quality_slider.setValue(self.quality.value())
+        self.quality_slider.setAccessibleName('Quality')
+        self.quality_slider.valueChanged.connect(self.quality.setValue)
+        self.quality.valueChanged.connect(self.quality_slider.setValue)
+        quality_row = QHBoxLayout()
+        quality_row.addWidget(self.quality_slider, 1)
+        quality_row.addWidget(self.quality)
         self.quality.setToolTip('Higher quality produces larger files. 0–100 maps to H.264 CRF 51–0.')
-        form.addRow('Quality (0–100)', self.quality)
+        self.quality_slider.setToolTip(self.quality.toolTip())
+        form.addRow('Quality (0–100)', quality_row)
         self.summary = QLabel()
         layout.addWidget(self.summary)
         help_text = QLabel('Both endpoints are included. Each selected data frame becomes one video frame.\nChanging FPS changes video duration. Higher quality produces larger files.')

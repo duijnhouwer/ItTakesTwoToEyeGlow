@@ -8,6 +8,13 @@ def test_video_dialog_defaults_range_fps_quality(qt_app):
     recording = synthetic_recording()
     dialog = VideoExportDialog(recording,(1234,567))
     assert dialog.isModal()
+    assert dialog.quality.value() == dialog.quality_slider.value() == 90
+    assert dialog.frame_size.currentText() == '1234 × 567 (Current UI display port)'
+    dialog.quality_slider.setValue(73)
+    assert dialog.quality.value() == 73
+    dialog.quality.lineEdit().setText('82%')
+    dialog.quality.interpretText()
+    assert dialog.quality.value() == dialog.quality_slider.value() == 82
     assert dialog.filename.text() == str(Path.home()/'Videos'/'synthetic_motion.mp4')
     assert (dialog.start_frame.value(),dialog.end_frame.value()) == (1,300)
     assert dialog.frame_size.currentData() == (1234,567)
@@ -73,8 +80,13 @@ def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
     controller.timer.stop()
     try:
         assert not hasattr(window,'export_range')
-        assert window.video_button.text() == 'Export Video ...'
-        assert window.screenshot_button.text() == 'Save Screenshot ...'
+        file_menu = window.menuBar().actions()[0]
+        assert file_menu.text() == 'File'
+        assert file_menu.menu().actions() == [window.screenshot_action, window.video_action]
+        assert window.screenshot_action.text() == 'Export screenshot ...'
+        assert window.video_action.text() == 'Export video ...'
+        assert not hasattr(window, 'screenshot_button')
+        assert not hasattr(window, 'video_button')
         controller.state.playing = True
         sizes = []
         def reject(dialog):
@@ -84,16 +96,24 @@ def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
             return QDialog.DialogCode.Rejected
         monkeypatch.setattr(VideoExportDialog,'exec',reject)
         window.viewport.resize(640,480)
-        window.video_button.click()
+        window.video_action.trigger()
         window.viewport.resize(800,600)
-        window.video_button.click()
+        window.video_action.trigger()
         assert sizes == [(640,480),(800,600)]
         assert controller.state.playing and controller.export_start == 0
         calls = []
         monkeypatch.setattr(main_window,'choose_file',lambda *args: tmp_path/'scene.png')
         monkeypatch.setattr(controller,'save_screenshot',lambda path,overwrite: calls.append((path,overwrite)))
-        window.screenshot_button.click()
+        window.screenshot_action.trigger()
         assert calls == [(tmp_path/'scene.png',True)]
+        controller.job = object()
+        window.sync()
+        assert not window.screenshot_action.isEnabled()
+        assert not window.video_action.isEnabled()
+        controller.job = None
+        window.sync()
+        assert window.screenshot_action.isEnabled()
+        assert window.video_action.isEnabled()
         assert default_filename(controller.recording,False) == Path.home()/'Pictures'/'synthetic_motion.png'
     finally:
         window.close()

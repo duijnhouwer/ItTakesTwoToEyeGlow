@@ -7,7 +7,7 @@ import math
 class VideoSettings:
     size: tuple[int, int] | None = None
     fps: float = 30.0
-    quality: int = 75
+    quality: int = 90
 
     def __post_init__(self):
         if not math.isfinite(self.fps) or not 1 <= self.fps <= 120:

@@ -21,7 +21,7 @@ class ImageWriter:
         self.pool.shutdown(wait=True, cancel_futures=True)
 
 
-def encode_video(folder, fps, cancelled, quality=75):
+def encode_video(folder, fps, cancelled, quality=90):
     """Encode staged PNGs in a separate FFmpeg process, with bounded cancellation."""
     import subprocess
     from concurrent.futures import CancelledError

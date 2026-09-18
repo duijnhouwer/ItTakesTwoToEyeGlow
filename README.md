@@ -32,10 +32,10 @@ assets are required. Windows and macOS deployment are Phase 2, not yet validated
 - Play/Pause, Step, Start, and the slider control the same frame state.
 - Try 0.25×, 0.5×, 1×, and 2× playback; Loop controls the end-of-sequence behavior.
 - Change **Placeholder spread** to update both head-locked volumes immediately.
-- **Save Screenshot ...** opens a PNG-only save dialog, defaulting on Linux to
+- **File → Export screenshot ...** opens a PNG-only save dialog, defaulting on Linux to
   `~/Pictures/<recording-name>.png`. It captures only the scene at the current
   viewport pixel size; there are no screenshot settings.
-- **Export Video ...** opens a modal settings dialog. Its editable filename
+- **File → Export video ...** opens a modal settings dialog. Its editable filename
   defaults on Linux to `~/Videos/<recording-name>.mp4`, with a **Browse ...** button.
   Only MP4 is supported; other filename extensions show an explanatory message.
 - Start/end frame fields select an inclusive interval, initially the full clip.
@@ -48,7 +48,7 @@ assets are required. Windows and macOS deployment are Phase 2, not yet validated
   selected source frame becomes one video frame, so changing FPS changes output
   duration. The dialog shows the selected frame count and resulting duration.
 - **Quality (0–100)** maps to H.264 CRF 51–0; higher values give better quality
-  and larger files. The default is 75. MP4 itself has no universal quality scale.
+  and larger files. The default is 90%. MP4 itself has no universal quality scale.
 - Save dialogs use normal overwrite confirmation. Typing an existing video path
   directly into the settings dialog also prompts before replacement. Cancelling
   a dialog leaves playback and export selection unchanged.
