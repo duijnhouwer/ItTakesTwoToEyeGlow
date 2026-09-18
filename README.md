@@ -116,3 +116,19 @@ and [PyVista packaging guidance](https://docs.pyvista.org/extras/pyinstaller).
 
 Video encoding follows the upstream [FFmpeg image-sequence documentation](https://ffmpeg.org/ffmpeg-formats.html)
 and uses the [imageio-ffmpeg bundled encoder](https://github.com/imageio/imageio-ffmpeg).
+
+### Eye placement settings
+
+**File → Settings ...** edits eyeball radius (default 12 mm) and eye relief
+(default 13 mm). Save persists changes to `config/settings_panel.json` and updates
+the current view. Cancel discards edits. The JSON also defines each setting's
+friendly display name, default, minimum, maximum, and decimal precision; only
+current values appear as editable fields in the dialog. Source and the current
+repository-built package share this external file. Keep it with the repository.
+
+Participant-colored spheres mark reconstructed SMPL-X eye centers, using the
+configured eyeball radius. Frames use matte white Wayfarer-style rims and temples.
+Skeleton line rendering, default lighting, and the translucent ground are retained,
+with no Phong highlights or shadows. Placeholder lens rear planes
+sit radius + relief in front of those centers along the head's forward direction
+(25 mm by default). Eye centers come from fitted anatomy, not measured gaze.

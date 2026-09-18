@@ -1,24 +1,13 @@
 """Presentation-only placeholder optics; no visibility analysis is performed."""
 import numpy as np
 import pyvista as pv
+from eyeglow_egobody.model.glasses import GLASSES_FACES, GLASSES_POINT_COUNT, glasses_points
 from pyvistaqt import QtInteractor
+from .materials import eye_sphere_source, eye_spheres
 from vtkmodules.vtkRenderingCore import vtkBillboardTextActor3D
 
 FACES = np.array([4,0,1,2,3, 4,4,7,6,5, 4,0,4,5,1, 4,1,5,6,2,
                   4,2,6,7,3, 4,3,7,4,0])
-
-# Head-local right/forward/up coordinates. Temple arms extend back from
-# the outer rims, with short downward tips; dimensions remain placeholders.
-GLASSES_POINTS = np.array([
-    [-.08,.1,-.03],[-.01,.1,-.03],[-.01,.1,.03],[-.08,.1,.03],
-    [.01,.1,-.03],[.08,.1,-.03],[.08,.1,.03],[.01,.1,.03],
-    [-.08,.1,.015],[-.08,-.025,.015],[-.08,-.045,-.015],
-    [.08,.1,.015],[.08,-.025,.015],[.08,-.045,-.015],
-])
-GLASSES_LINES = np.array([
-    6,0,1,2,3,8,0, 6,4,5,11,6,7,4, 2,1,4,
-    3,8,9,10, 3,11,12,13,
-])
 
 def placeholder_points(spread):
     # Visual prototype only: near rectangle and manually scaled far rectangle.
@@ -30,6 +19,9 @@ class Viewport(QtInteractor):
     def __init__(self, parent, recording):
         super().__init__(parent, auto_update=False, multi_samples=0)
         self.recording = recording
+        self.optical_settings = dict(eyeball_radius_mm=12., eye_relief_mm=13.)
+        self.eye_parts = []
+        self.eye_sphere = eye_sphere_source(self.optical_settings['eyeball_radius_mm']/1000.)
         self.set_background('#172330')
         # Azimuth/elevation orbit keeps world Z upright and does not roll.
         self.enable_terrain_style(mouse_wheel_zooms=True, shift_pans=True)
@@ -41,12 +33,11 @@ class Viewport(QtInteractor):
         lines = np.column_stack((np.full(len(recording.bones),2),recording.bones)).ravel()
         for p,color in enumerate(('#59c9f1','#ffb56b')):
             skeleton = pv.PolyData(np.nan_to_num(recording.joints[p,0]).copy(), lines=lines)
-            glasses = pv.PolyData(GLASSES_POINTS.copy(), lines=GLASSES_LINES)
+            glasses = pv.PolyData(np.zeros((GLASSES_POINT_COUNT,3)), faces=GLASSES_FACES)
             frustum = pv.PolyData(np.zeros((8,3)), faces=FACES)
-            for mesh, options in ((skeleton,dict(color=color,line_width=5)),
-                                  (glasses,dict(color='white',line_width=4)),
-                                  (frustum,dict(color=color,opacity=.18,show_edges=True))):
-                self.stable_actors.append(self.add_mesh(mesh,**options))
+            self.stable_actors.append(self.add_mesh(skeleton, color=color, line_width=5))
+            self.stable_actors.append(self.add_mesh(glasses, color='white', ambient=.4, diffuse=.6, specular=0.))
+            self.stable_actors.append(self.add_mesh(frustum, color=color, opacity=.18, show_edges=True))
             label = vtkBillboardTextActor3D()
             label.SetInput('A' if p == 0 else 'B')
             label.GetTextProperty().SetFontSize(24)
@@ -54,6 +45,11 @@ class Viewport(QtInteractor):
             self.renderer.AddActor(label)
             self.stable_actors.append(label)
             self.parts.append((skeleton,glasses,frustum,label))
+            eyes = pv.PolyData(np.zeros((2,3)))
+            eye_actor = self.add_mesh(eye_spheres(eyes, self.eye_sphere), color=color, specular=0.)
+            eye_actor.GetProperty().SetInterpolationToGouraud()
+            self.eye_parts.append((eyes, eye_actor))
+            self.stable_actors.append(eye_actor)
         # Keep captions plain: pipes trigger VTK MathText table rendering.
         self.caption = self.add_text('Synthetic motion - Placeholder optics - No visibility scores',font_size=10,color='white')
         self.set_frame(0,.35)
@@ -75,17 +71,32 @@ class Viewport(QtInteractor):
         self.reset_view()
 
     def set_frame(self, frame, spread):
+        self.eye_sphere.SetRadius(self.optical_settings['eyeball_radius_mm']/1000.)
         for p,(skeleton,glasses,frustum,label) in enumerate(self.parts):
             valid = bool(self.recording.valid[p,frame])
-            for actor in self.stable_actors[p*4:p*4+4]:
+            for actor in self.stable_actors[p*5:p*5+5]:
                 actor.SetVisibility(valid)
             if not valid:
                 continue
             transform = self.recording.heads[p,frame]
             rot,origin = transform[:3,:3],transform[:3,3]
             skeleton.points[:] = self.recording.joints[p,frame]
-            glasses.points[:] = GLASSES_POINTS @ rot.T + origin
-            frustum.points[:] = placeholder_points(spread) @ rot.T + origin
+            eyes_mesh, eye_actor = self.eye_parts[p]
+            eye_centers = None if self.recording.eyes is None else self.recording.eyes[p,frame]
+            have_eyes = bool(eye_centers is not None and np.isfinite(eye_centers).all())
+            for actor in (self.stable_actors[p*5+1], self.stable_actors[p*5+2], eye_actor):
+                actor.SetVisibility(have_eyes)
+            if have_eyes:
+                eyes_mesh.points[:] = eye_centers
+                eyes_mesh.GetPoints().Modified()
+                eyes_mesh.Modified()
+                radius = self.optical_settings['eyeball_radius_mm']
+                relief = self.optical_settings['eye_relief_mm']
+                glasses.points[:] = glasses_points(eye_centers, rot, radius, relief)
+                near = eye_centers.mean(axis=0) + rot[:,1] * ((radius+relief)/1000.)
+                local_frustum = placeholder_points(spread)
+                local_frustum[:,1] -= .1
+                frustum.points[:] = local_frustum @ rot.T + near
             for mesh in (skeleton,glasses,frustum):
                 mesh.GetPoints().Modified()
                 mesh.Modified()

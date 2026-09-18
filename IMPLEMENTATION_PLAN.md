@@ -748,3 +748,35 @@ the plan for activity-specific visibility reporting; it does not authorize
 starting later-phase implementation now or approve the proposed group mapping.
 The existing MVP visibility criteria remain in force; the selection and reporting
 criteria above extend them with explicit activity scope and reproducibility.
+
+## Authorized Phase 2 eye placement and settings addition — 2026-09-18
+
+During visual review, the owner requested SMPL-X eye-center point markers and
+placeholder glasses positioned by eyeball radius plus eye relief, with defaults
+12 mm and 13 mm. The owner also requested `config/settings_panel.json` containing
+values, display names, min/max, and precision, and a functional File → Settings ...
+dialog for editing values. This small placement/settings increment is authorized
+before Phase 3; final optical geometry and visibility analysis retain their later
+phase scope. See the latest [Phase 2 validation note](docs/PHASE2_DATA_INSPECTION.md).
+
+### Authorized surface and lighting refinement
+
+The owner subsequently requested participant-colored spherical eyeballs, modest
+Phong shine on all segments and eyes, and an invisible overhead white light
+casting ground shadows. This extends the Phase 2 visual representation with real
+sphere/tube surfaces and a shadow-receiving ground, without starting visibility
+analysis or final optical modeling.
+
+### Surface and lighting rollback
+
+The owner subsequently rejected the shadow appearance and opaque floor. Restore
+the original lines, lighting, and translucent ground; retain only the colored,
+radius-controlled eyeball spheres from the surface/lighting refinement. No Phong
+highlights, overhead light, or shadows remain.
+
+### Authorized frame styling
+
+The owner supplied a Wayfarer-style reference and requested white frames with
+that silhouette. This authorizes rounded trapezoid rim surfaces, a curved bridge,
+and tapered temples while retaining the current eye-relative placement and
+no-shadow rendering. Final optical geometry and analysis remain later work.

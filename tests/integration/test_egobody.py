@@ -24,13 +24,13 @@ def dataset(tmp_path, monkeypatch):
     (root/'data_splits.csv').write_text(f'train,val,test\n{name},,\n')
     models = project/'models'
     models.mkdir()
-    rest = np.zeros((22,3))
-    rest[:,1] = np.arange(22)*.05
-    shapes = np.zeros((22,3,20))
+    rest = np.zeros((25,3))
+    rest[:,1] = np.arange(25)*.05
+    shapes = np.zeros((25,3,20))
     shapes[15,1,0] = .1
     for gender in ('MALE','FEMALE'):
-        np.savez(models/f'SMPLX_{gender}.npz', v_template=rest, J_regressor=np.eye(22),
-                 shapedirs=shapes, kintree_table=np.array([PARENTS, np.arange(22)]))
+        np.savez(models/f'SMPLX_{gender}.npz', v_template=rest, J_regressor=np.eye(25),
+                 shapedirs=shapes, kintree_table=np.array([np.r_[PARENTS,15,15,15], np.arange(25)]))
     for role, idx, gender in [('camera_wearer',1,'female'),('interactee',0,'male')]:
         for frame in (10,11,13):
             folder = root/f'smplx_{role}_train'/name/f'body_idx_{idx}'/'results'/f'frame_{frame:05}'
@@ -268,3 +268,28 @@ def test_real_data_ui_reports_missing_assets(qt_app,monkeypatch,dataset,tmp_path
         assert not window.controller.recording.valid.any()
     finally:
         window.close()
+
+
+def test_eye_centers_follow_head_and_survive_cache(dataset):
+    root, models = dataset
+    model = BodyModel(models/'SMPLX_MALE.npz')
+    params = dict(betas=np.zeros(10), expression=np.zeros(10), body_pose=np.zeros(63),
+                  global_orient=np.array([0,0,np.pi/2]),transl=np.array([2,3,4]))
+    params['body_pose'][14*3:15*3] = [np.pi/2,0,0]  # head joint 15
+    joints, head, eyes = model.pose(params, include_eyes=True)
+    expected_rotation = rotations(params['global_orient']) @ rotations(np.array([np.pi/2,0,0]))
+    expected = joints[15] + (model.rest[22:24]-model.rest[15]) @ expected_rotation.T
+    np.testing.assert_allclose(eyes, expected, atol=1e-12)
+    info, = discover(root)
+    cold = loading.load_recording(info, models)
+    assert cold.eyes.shape == (2,4,2,3) and cold.eyes.flags.c_contiguous
+    assert np.isnan(cold.eyes[:,2]).all()
+    np.testing.assert_allclose(cold.eyes[0,0], [[3,-3.1,3.15],[3,-3.1,3.2]], atol=1e-6)
+    hot = loading.load_recording(info, models)
+    np.testing.assert_array_equal(hot.eyes, cold.eyes)
+    cache, = loading.cache_directory(root).glob('*.npz')
+    with np.load(cache, allow_pickle=False) as data:
+        arrays = {k:data[k] for k in data.files}
+    arrays['eyes'][0,0,0] = np.nan
+    np.savez_compressed(cache, **arrays)
+    assert loading.load_recording(info, models).metadata['cache_status'] == 'rebuilt'

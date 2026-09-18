@@ -14,7 +14,7 @@ from .skeleton import BodyModel, BONES, model_path
 from eyeglow_egobody.runtime_paths import project_root
 
 PROJECT_ROOT = project_root()
-SCHEMA = 'smplx-body22-expression-head15-scene-yup-to-zup-v3'
+SCHEMA = 'smplx-body22-eyes23-24-expression-head15-scene-yup-to-zup-v4'
 SCENE_TO_DISPLAY = np.array([[1.,0,0,0],[0,0,-1,0],[0,1,0,0],[0,0,0,1]])
 
 
@@ -81,6 +81,7 @@ def source_key(info, files, models, transform):
 def validate_arrays(recording, info):
     n = info.end-info.start+1
     if (recording.joints.shape != (2,n,22,3) or recording.heads.shape != (2,n,4,4)
+            or recording.eyes is None or recording.eyes.shape != (2,n,2,3)
             or recording.valid.shape != (2,n) or recording.valid.dtype != np.bool_
             or not np.array_equal(recording.frame_ids, np.arange(info.start,info.end+1))
             or not np.array_equal(recording.timestamps, np.arange(n)/30.)):
@@ -89,6 +90,8 @@ def validate_arrays(recording, info):
         raise ValueError('No usable participant frames')
     if not np.isfinite(recording.joints[recording.valid]).all() or not np.isfinite(recording.heads[recording.valid]).all():
         raise ValueError('Nonfinite valid poses')
+    if not np.isfinite(recording.eyes[recording.valid]).all():
+        raise ValueError('Nonfinite valid eye centers')
 
 
 def load_recording(info, model_dir, cancelled=None):
@@ -108,7 +111,7 @@ def load_recording(info, model_dir, cancelled=None):
             if metadata['source_key'] != key or metadata['schema'] != SCHEMA:
                 raise ValueError('Cache identity mismatch')
             recording = Recording(data['timestamps'], data['joints'], data['heads'], 30., info.name,
-                                  data['valid'], data['frame_ids'], BONES, metadata)
+                                  data['valid'], data['frame_ids'], BONES, metadata, data['eyes'])
         validate_arrays(recording, info)
         check()
         return replace(recording, metadata={**metadata, 'cache_status': 'hit'})
@@ -117,6 +120,7 @@ def load_recording(info, model_dir, cancelled=None):
     n = info.end-info.start+1
     joints = np.full((2,n,22,3), np.nan, dtype=np.float32)
     heads = np.full((2,n,4,4), np.nan, dtype=np.float32)
+    eyes = np.full((2,n,2,3), np.nan, dtype=np.float32)
     valid = np.zeros((2,n), dtype=bool)
     errors = []
     loaded_models = {}
@@ -131,10 +135,11 @@ def load_recording(info, model_dir, cancelled=None):
                 params = read_fit(path)
                 if params.get('gender', info.genders[p]) != info.genders[p]:
                     raise ValueError('Fit gender disagrees with recording metadata')
-                points, head = model.pose(params)
+                points, head, eye_centers = model.pose(params, include_eyes=True)
                 i = frame-info.start
                 joints[p,i] = points @ transform[:3,:3].T + transform[:3,3]
                 heads[p,i] = transform @ head
+                eyes[p,i] = eye_centers @ transform[:3,:3].T + transform[:3,3]
                 valid[p,i] = True
             except (OSError, ValueError, KeyError, TypeError, EOFError, pickle.UnpicklingError) as exc:
                 if len(errors) < 20:
@@ -158,10 +163,11 @@ def load_recording(info, model_dir, cancelled=None):
                                  'Scene calibration applied once to both participants',
                                  '30 Hz timestamps inferred from synchronized Kinect frame IDs; no measured timestamps',
                                  'Head orientation from fitted body chain to joint 15, not eye tracking',
-                                 'Optics centered at head joint with fixed 10 cm forward offset; uncalibrated',
+                                 'Eye centers reconstructed from SMPL-X joints 23/24; fitted anatomy, not measured gaze',
+                                 'Lens rear planes offset from eye centers by configured eyeball radius plus eye relief along head forward; placeholder frames',
                                  'Ground plane: 2nd percentile ankle/foot joint height, not measured floor; no motion recentering'])
     recording = Recording(np.arange(n)/30., np.ascontiguousarray(joints), np.ascontiguousarray(heads),
-                          30., info.name, valid, np.arange(info.start,info.end+1), BONES, metadata)
+                          30., info.name, valid, np.arange(info.start,info.end+1), BONES, metadata, np.ascontiguousarray(eyes))
     validate_arrays(recording, info)
     check()
     temporary = None
@@ -170,7 +176,7 @@ def load_recording(info, model_dir, cancelled=None):
         with tempfile.NamedTemporaryFile(dir=cache.parent, suffix='.npz', delete=False) as stream:
             temporary = Path(stream.name)
             np.savez_compressed(stream, timestamps=recording.timestamps, joints=joints, heads=heads,
-                                valid=valid, frame_ids=recording.frame_ids, metadata=json.dumps(metadata))
+                                valid=valid, eyes=eyes, frame_ids=recording.frame_ids, metadata=json.dumps(metadata))
         check()
         os.replace(temporary, cache)
     except OSError as exc:

@@ -42,7 +42,9 @@ class BodyModel:
     def __init__(self, path):
         with np.load(path, allow_pickle=False) as data:
             template = data['v_template']
-            regressor = data['J_regressor'][:22]
+            regressor = data['J_regressor'][list(range(22)) + [23,24]]
+            if not np.array_equal(data['kintree_table'][0,23:25], [15,15]):
+                raise ValueError('Unsupported SMPL-X eye joint hierarchy')
             dirs = data['shapedirs']
             shapes = dirs[...,:10]
             tree = data['kintree_table'][0,:22].astype(np.int64)
@@ -54,12 +56,12 @@ class BodyModel:
             # SMPL-X expression components affect regressed joint centers too.
             expression_start = 300 if dirs.shape[-1] > 300 else 10
             self.expressions = np.einsum('jv,vck->jck', regressor, dirs[...,expression_start:expression_start+10])
-        if (self.rest.shape != (22,3) or self.shapes.shape != (22,3,10)
-                or self.expressions.shape != (22,3,10)
+        if (self.rest.shape != (24,3) or self.shapes.shape != (24,3,10)
+                or self.expressions.shape != (24,3,10)
                 or not all(np.isfinite(a).all() for a in (self.rest,self.shapes,self.expressions))):
             raise ValueError('Invalid SMPL-X model dimensions')
 
-    def pose(self, params):
+    def pose(self, params, *, include_eyes=False):
         def field(name, count):
             value = np.asarray(params[name], dtype=float)
             if value.size != count or not np.isfinite(value).all():
@@ -79,4 +81,8 @@ class BodyModel:
         position += field('transl',3)
         head = np.eye(4)
         head[:3,:3], head[:3,3] = world[15] @ OPTICS_BASIS, position[15]
+        if include_eyes:
+            # Eye rotations change orientation, not the centers of these leaf joints.
+            eyes = position[15] + (rest[22:24] - rest[15]) @ world[15].T
+            return position, head, eyes
         return position, head

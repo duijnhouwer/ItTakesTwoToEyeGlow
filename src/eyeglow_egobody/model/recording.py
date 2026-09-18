@@ -17,6 +17,7 @@ class Recording:
     frame_ids: np.ndarray | None = None
     bones: np.ndarray = field(default_factory=lambda: BONES.copy())
     metadata: dict = field(default_factory=dict)
+    eyes: np.ndarray | None = None  # (participant, frame, left/right, XYZ), meters
 
     def __post_init__(self):
         if self.valid is None:
@@ -52,4 +53,6 @@ def synthetic_recording():
             joints[p,f] = pose @ rot.T + position
             heads[p,f,:3,:3] = rot
             heads[p,f,:3,3] = joints[p,f,3]
-    return Recording(times, np.ascontiguousarray(joints), heads)
+    eye_offsets = np.array([[-.032,.08,0],[.032,.08,0]])
+    eyes = np.einsum('pfij,ej->pfei', heads[...,:3,:3], eye_offsets) + heads[...,:3,3][:,:,None,:]
+    return Recording(times, np.ascontiguousarray(joints), heads, eyes=np.ascontiguousarray(eyes))

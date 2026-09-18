@@ -10,6 +10,8 @@ from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.runtime_paths import default_models
 from eyeglow_egobody.controller import Controller
+from eyeglow_egobody.model.panel_settings import PanelSettings
+from eyeglow_egobody.ui.settings_dialog import SettingsDialog
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
 
 class MainWindow(QMainWindow):
@@ -19,6 +21,7 @@ class MainWindow(QMainWindow):
         self.dataset = dataset
         self.model_dir = model_dir or default_models()
         self.infos = []
+        self.panel_settings = PanelSettings()
         self.resize(1200,840)
         self._export_size_limits = None
         root = QWidget()
@@ -45,6 +48,8 @@ class MainWindow(QMainWindow):
                                np.tile(np.eye(4),(2,1,1,1)), name='No recording loaded',
                                valid=np.zeros((2,1),dtype=bool)) if dataset else synthetic_recording())
         self.viewport = Viewport(root,recording)
+        self.viewport.optical_settings = self.panel_settings.values
+        self.viewport.set_frame(0,.35)
         layout.addWidget(self.viewport.interactor,1)
         self.controller = Controller(recording,self.viewport,output_root,self)
         self.controls = QWidget()
@@ -126,6 +131,9 @@ class MainWindow(QMainWindow):
         self.screenshot_action.triggered.connect(lambda:self.choose_export(False))
         self.video_action = file_menu.addAction('Export video ...')
         self.video_action.triggered.connect(lambda:self.choose_export(True))
+        file_menu.addSeparator()
+        self.settings_action = file_menu.addAction('Settings ...')
+        self.settings_action.triggered.connect(self.show_settings)
         layout.addWidget(self.controls)
         self.cancel = QPushButton('Cancel export')
         self.cancel.clicked.connect(self.controller.cancel_export)
@@ -149,6 +157,20 @@ class MainWindow(QMainWindow):
         self.sync()
         if dataset:
             self.controller.discover_recordings(dataset)
+
+    def show_settings(self):
+        try:
+            # Pick up manual edits to values or display metadata between openings.
+            store = PanelSettings(self.panel_settings.path)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            QMessageBox.warning(self, 'Settings unavailable', str(exc))
+            return
+        dialog = SettingsDialog(store, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.panel_settings = store
+            self.viewport.optical_settings = store.values
+            self.controller.refresh()
+            self.statusBar().showMessage('Settings saved')
 
     def found_recordings(self, infos):
         self.infos = infos
@@ -190,7 +212,9 @@ class MainWindow(QMainWindow):
         diagnostics = {**recording.metadata, 'current_source_frame': int(recording.frame_ids[frame]),
                        'current_valid': recording.valid[:,frame].tolist(),
                        'current_pelvis_m': recording.joints[:,frame,0].tolist(),
-                       'current_head_transforms': recording.heads[:,frame].tolist()}
+                       'current_head_transforms': recording.heads[:,frame].tolist(),
+                       'current_eye_centers_m': None if recording.eyes is None else recording.eyes[:,frame].tolist(),
+                       'optical_settings': self.panel_settings.values}
         text.setPlainText(json.dumps(diagnostics, indent=2))
         layout.addWidget(text)
         dialog.exec()
@@ -255,6 +279,7 @@ class MainWindow(QMainWindow):
         self.controls.setEnabled(not busy and not loading and usable)
         self.screenshot_action.setEnabled(not busy and not loading and usable)
         self.video_action.setEnabled(not busy and not loading and usable)
+        self.settings_action.setEnabled(not busy)
         self.viewport.setEnabled(not busy)
         self.cancel.setVisible(busy)
 

@@ -82,7 +82,7 @@ def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
         assert not hasattr(window,'export_range')
         file_menu = window.menuBar().actions()[0]
         assert file_menu.text() == 'File'
-        assert file_menu.menu().actions() == [window.screenshot_action, window.video_action]
+        assert [a for a in file_menu.menu().actions() if not a.isSeparator()] == [window.screenshot_action, window.video_action, window.settings_action]
         assert window.screenshot_action.text() == 'Export screenshot ...'
         assert window.video_action.text() == 'Export video ...'
         assert not hasattr(window, 'screenshot_button')

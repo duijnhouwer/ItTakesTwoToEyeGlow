@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "settings": {
+    "eyeball_radius_mm": {
+      "display_name": "Eyeball radius (mm)",
+      "value": 12.0,
+      "default": 12.0,
+      "min": 1.0,
+      "max": 30.0,
+      "precision": 1
+    },
+    "eye_relief_mm": {
+      "display_name": "Eye relief (mm)",
+      "value": 13.0,
+      "default": 13.0,
+      "min": 0.0,
+      "max": 100.0,
+      "precision": 1
+    }
+  }
+}

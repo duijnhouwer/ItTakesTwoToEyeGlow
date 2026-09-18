@@ -116,8 +116,9 @@ with reconstructed bodies.
 - Head rotation follows the fitted chain to SMPL-X joint 15. It is not measured
   eye gaze or a separately calibrated headset pose. The optics basis maps local
   right/forward/up to model `-X/+Z/+Y`; facing direction remains a visual-review item.
-- Placeholder optics use the head joint and a fixed 10 cm forward offset.
-  Neither their eye positions nor their dimensions are calibrated.
+- Placeholder optics now use reconstructed eye centers plus configurable radius
+  and eye relief along head-forward (25 mm total by default). Frame dimensions
+  remain placeholders; see the eye-placement update below.
 - The ground plane is placed at the second percentile of ankle/foot joint
   heights over both people. This is a **joint-height floor proxy**, not a measured
   sole contact plane; foot-center height and seated motion may bias it. It does
@@ -128,8 +129,8 @@ with reconstructed bodies.
 
 ## Cache and UI behavior
 
-Arrays: float32 joints `(2,F,22,3)`, float32 head transforms `(2,F,4,4)`, bool
-validity `(2,F)`, int source IDs `(F,)`, float64 seconds `(F,)`. Geometry arrays
+Arrays: float32 joints `(2,F,22,3)`, float32 head transforms `(2,F,4,4)`,
+float32 eye centers `(2,F,2,3)`, bool validity `(2,F)`, int source IDs `(F,)`, float64 seconds `(F,)`. Geometry arrays
 are contiguous. The controller replaces recording length, native FPS, scrub
 range, and export range together. VTK actors are reused across frames and loads.
 
@@ -252,3 +253,107 @@ Verified model arrays: `v_template (10475,3)`, `J_regressor (55,10475)`,
 Missing model assets no longer block playback. Joint review of participant
 identity, body proportions, contact moments, and placeholder head placement
 remains pending; no Phase 3 sign-off is implied.
+
+### Eye centers and editable placement settings — 2026-09-18
+
+The owner requested visible eye centers and eye-relative glasses placement during
+Phase 2 visual review. The loader now also reconstructs the anatomical left/right
+SMPL-X eye joints (zero-based 23/24), both children of head joint 15. Their
+shape/expression-dependent rest centers follow the fitted head transform and the
+same scene/display transform as the body. Leaf eye rotations do not change their
+joint-center positions; these are fitted anatomical centers, not measured gaze.
+
+The normalized recording adds float32 contiguous `eyes (2,F,2,3)` in meters,
+ordered left/right. Invalid participant frames have NaN eyes and hidden markers.
+Cache schema v4 includes and validates eyes; older caches rebuild automatically.
+The 22 body joints and their skeleton connections remain unchanged. Synthetic
+fixtures use explicitly invented eye offsets.
+
+Bright, unshaded point markers display the centers. Each placeholder rear lens
+plane sits forward of its corresponding eye center by
+`(eyeball_radius_mm + eye_relief_mm) / 1000` along head-forward: 25 mm by default.
+The plane center represents the rear optical vertex; no lens thickness, curvature,
+or final calibrated optical geometry is implemented. Temple arms follow the
+frames. Lens rectangles are 50 mm wide by 60 mm high, centered on their respective
+eyes; their size and temple dimensions remain placeholders.
+
+`config/settings_panel.json` stores schema version, display names, current/default
+values, min/max, and decimal precision. **File → Settings ...** generates text
+fields from these definitions. Save validates and atomically persists values,
+then refreshes current geometry; Cancel leaves values unchanged. The JSON metadata
+is not exposed as editable settings. Values are in millimeters: radius defaults
+to 12 (range 1–30), relief to 13 (range 0–100), both with one decimal place.
+These ranges are application input limits, not anatomical assertions. Source and
+repository-built desktop runs share this external config file.
+
+Validation: 77 automated tests passed, including rotated lens clearance,
+eye/head kinematics, cache round-trip and invalidation, input validation,
+Save/Cancel/write failure, and menu-to-viewport updates. Two real recordings
+(1,290 and 760 paired valid frames) passed cold/cache loading. Independent full
+vertex regression on 12 sampled participant poses agreed with cached eye centers
+within 1.77e-7 m. Close-up and settings-dialog captures were visually inspected;
+artifacts are in `.runtime/eye-settings/`. Joint Phase 2 sign-off remains pending.
+
+Rebuilt standalone Linux package smoke passed on the native NVIDIA desktop:
+10 stable actors, playback, PNG/FHD/4K captures, and a 60-frame FHD MP4 at 24 FPS
+(2.5 seconds). Report: `.runtime/eye-settings/package-smoke/smoke-result.json`.
+
+### Spherical eyes, Phong surfaces, and ground shadows — 2026-09-18
+
+At the owner's request, eye markers are now actual sphere geometry in each
+participant's color. Sphere radius follows `eyeball_radius_mm` (12 mm by default)
+and updates immediately with settings. Skeleton segments and glasses use live
+capped tube filters (9 mm and 2.5 mm radii respectively), with Phong interpolation
+and modest specular highlights. Eye sphere glyphs and tube filters reuse their
+actors during playback; recorded joints and eye-center coordinates are unchanged.
+
+An invisible white scene light sits above the recording bounds. VTK's shadow
+pass requires a positional light's cone angle to be less than 90 degrees, so this
+uses a broad 50-degree downward beam with uniform angular intensity, rather than
+an omnidirectional light. Its height adjusts to cover the ground. The ground is
+now opaque to receive shadows and expands to cover the recording. Shadow-camera
+aspect is explicitly square to avoid VTK dark-band artifacts in rectangular
+windows and exports. Participant labels remain unlit annotations.
+
+Native real-recording captures, including shadow-on/off comparisons and a close-up
+of the spheres and Phong highlights, are in `.runtime/shiny/`. Automated tests
+cover physical sphere radius and live center/radius changes, live tube geometry,
+hidden positional lighting, and the shadow-camera aspect correction.
+
+Validation: all 80 tests passed. The rebuilt standalone Linux package passed
+native desktop playback, stable actor checks, PNG/FHD/4K captures, and 60-frame
+FHD MP4 export (24 FPS, 2.5 seconds). Report:
+`.runtime/shiny/package-smoke/smoke-result.json`. Real-data shadow-on/off captures
+confirmed localized ground shadows without the earlier aspect-ratio bands.
+
+### Lighting rollback, retaining spherical eyes — 2026-09-18
+
+The owner rejected the rough shadows and opaque floor obscuring the frustums.
+Restored the original line-based skeleton/glasses rendering, default scene lights,
+and 30%-opaque, fixed-size ground plane. Removed the overhead light, shadow pass,
+shadow-camera workaround, tube surfaces, and Phong/specular highlights.
+Participant-colored eyeball spheres remain, with matte Gouraud shading under the
+original lights and radius controlled by `eyeball_radius_mm`. Eye-center loading,
+eye-relative glasses placement, settings, and caching are unchanged. This
+supersedes the surface/lighting refinement above.
+
+Rollback validation: 78 tests passed; real-data captures were inspected, and the
+rebuilt package passed native playback and PNG/FHD/4K/MP4 export checks. Artifacts:
+`.runtime/matte/`, with package report at `package-smoke/smoke-result.json`.
+
+### White Wayfarer-style frames — 2026-09-18
+
+The owner supplied a Wayfarer reference and requested that silhouette in white.
+Replaced rectangular outlines with closed, matte white frame surfaces: rounded
+trapezoid rims, a thicker brow, raised curved bridge, and tapered temple arms with
+curved ear tips. The frame uses fixed mesh topology and in-place point updates.
+Rear rim planes remain radius + relief in front of each fitted eye (25 mm with
+default settings); front frame surfaces extend another 4 mm. Frame styling and
+temple dimensions remain illustrative rather than calibrated. Colored spherical
+eyes, line skeletons, default lighting, and the translucent floor are retained;
+Phong shine, overhead light, and shadows remain absent. Front/angled real-data
+captures are in `.runtime/wayfarer/`.
+
+Frame-style validation: 78 tests passed, including rotated rear-plane clearance
+and live renderer updates. The rebuilt package passed stable-actor playback and
+PNG/FHD/4K/MP4 exports; report: `.runtime/wayfarer/package-smoke/smoke-result.json`.
