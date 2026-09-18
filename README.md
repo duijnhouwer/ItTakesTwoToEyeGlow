@@ -17,7 +17,7 @@ python3.12 -m venv .venv
 
 Qt Widgets are supplied by `PySide6-Essentials`; unused Qt Addons are omitted.
 The desktop requires a working display and OpenGL driver. No dataset or model
-assets are required. Windows and macOS deployment are Phase 2, not yet validated.
+assets are required. Windows and macOS deployment are Phase 8, before final polishing in Phase 9, and are not yet validated.
 
 ## Try the prototype
 

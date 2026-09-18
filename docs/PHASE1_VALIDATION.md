@@ -92,7 +92,7 @@ on Linux. It also reported missing XCB support libraries: `libxcb-cursor`,
 `libxcb-icccm`, `libxcb-image`, `libxcb-keysyms`, and `libxcb-render-util`.
 The tested Wayland launch works; an X11-only deployment is not validated and
 would require those system libraries. Windows and Apple Silicon builds remain
-Phase 2. No real data loading, calibrated optics, visibility scores, or MP4
+Phase 8 under the reordered plan. No real data loading, calibrated optics, visibility scores, or MP4
 encoding is claimed by this spike.
 
 ## Joint hands-on review (pending)

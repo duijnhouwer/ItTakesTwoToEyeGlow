@@ -104,70 +104,83 @@ and a standalone Linux package has passed the Phase 1 smoke test. Any packaging
 or interaction issue that could invalidate the architecture must be resolved
 before proceeding.
 
-## Phase 2 — Windows and Apple Silicon Deployment Spike
+> **Phase 1 complete**
+>
+> Concluded on 2026-09-18 11:40AM EDT. Commit: `116e7bff632e185c0e9d87ca872c21834bab9c9b`.
+
+## Phase 2 — EgoBody Data Inspection, Loading, and Two-Person Playback
 
 ### Rationale
 
-PyInstaller packages include platform-specific Python, Qt, VTK, and native
-libraries and therefore must be built and tested on their target operating
-systems. Validating deployment immediately after the Linux technical spike
-catches platform incompatibilities before significant application functionality
-depends on the stack.
+The immediate priority is to establish what the local EgoBody dataset actually
+contains and replace synthetic motion with a real two-person recording. Inspect
+its organization and stored values before choosing a loader or assuming joint,
+pose, timing, or coordinate conventions. Validate paired playback before
+implementing visibility mathematics or final optical rendering.
 
 ### Implementation goal
 
-Build the Phase 1 synthetic application natively on both additional MVP target
-platforms:
+Inspect the dataset read-only, document the observed structure, and connect one
+representative paired recording to the existing application:
 
-- Windows 11 x64 using the available Windows development machine.
-- A recent macOS release on Apple Silicon using the available Mac.
-- Intel Macs are explicitly unsupported.
-- Use equivalent pinned application dependencies across all three platforms,
-  allowing only documented platform-specific differences.
-- Produce a PyInstaller one-folder package on each native target system; do not
-  cross-compile.
-- Document reproducible environment setup and build commands for each platform.
-- Make only the minimum platform-specific code or packaging changes required to
-  preserve the same behavior demonstrated in Phase 1.
+- Document the directory layout, recording identifiers, participant roles,
+  representative file formats, field names, array shapes, and available metadata.
+- Establish how the two people are paired and synchronized, including frame IDs,
+  timestamps or frame rate, missing frames, units, and coordinate transforms.
+- Confirm whether files contain usable joints or body-model parameters requiring
+  reconstruction; identify any required model assets before implementing loading.
+- Discover recordings with matching participant motion and paired frames.
+- Display basic recording metadata and validation status.
+- Load and normalize a selected recording into compact contiguous NumPy arrays.
+- Establish a shared coordinate system without applying transforms twice.
+- Document available head-pose information and any approximations needed for
+  existing placeholder optics; calibrated eye/glasses geometry remains later work.
+- Mark missing or unusable frames invalid rather than silently fabricating data.
+- Write versioned derived caches only under `code-repo/.runtime/`.
+- Load and preprocess in a worker so the UI remains responsive.
+- Replace the synthetic demo as the primary playback path with both real
+  participant skeletons, synchronized in the existing viewport. Keep synthetic
+  fixtures available for deterministic tests.
+- Reuse play/pause, stepping, scrubbing, and camera controls with the recording
+  actual frame count and timing rather than synthetic constants.
+- Provide transformation and placement diagnostics needed for validation.
 
 ### Completion criteria
 
-- The packaged application launches outside the development environment on
-  Windows 11 x64 and recent macOS on Apple Silicon.
-- Synthetic playback, camera interaction, parameter updates, screenshots, and
-  numbered-frame export work on both platforms.
-- Platform-specific fixes do not break the tested Linux package.
-- The exact OS version, CPU architecture, Python version, dependency versions,
-  build command, warnings, and result are recorded for all three platforms.
-- Any unsupported behavior is documented and does not conflict with the MVP
-  acceptance criteria.
+- A dataset inspection note shows representative paths, fields, shapes, pairing
+  rules, and coordinate/timing evidence, separating observations from assumptions.
+- At least one actual two-person recording loads and plays in the application
+  from its compact normalized representation, with both people visible together.
+- Playback controls and frame labels follow the loaded recording length and timing.
+- Participant scale, floor height, separation, orientation, and contact moments
+  are physically plausible on manual inspection.
+- Every derived or approximated value is identified in metadata.
+- Cache invalidation accounts for source identity, transformation/schema version,
+  and relevant derivation rules.
+- A cache failure safely falls back to rebuilding outside the dataset.
 
-## Test Phase 2 — Cross-Platform Deployment Review
+## Test Phase 2 — Real-Data Validation
 
 ### Developer tests
 
-- Create each package on its native operating system from a clean checkout or
-  documented clean environment.
-- Launch each package without relying on the development virtual environment.
-- Run the same startup, playback, camera, parameter, screenshot, and frame-export
-  smoke-test checklist on Windows 11 x64, Apple Silicon macOS, and Linux.
-- Inspect packaged output for missing Qt or VTK plugins and unintended absolute
-  paths or undeclared runtime dependencies.
-- Confirm that outputs are written to permitted user-writable locations and that
-  no file is written under `egobody-data`.
+- Run discovery, pairing, normalization, cache, and invalid-frame integration
+  tests against a small representative fixture or bounded dataset sample.
+- Verify cold-load and cached-load behavior.
+- Audit filesystem activity and confirm the dataset remains unchanged.
+- Inspect diagnostic coordinate frames and numeric ranges.
 
 ### Joint hands-on test
 
-Together, review the Windows 11 and Apple Silicon macOS builds using the same
-core workflow approved on Linux. Compare behavior and record platform-specific
-differences rather than accepting silent divergence.
+Select and review at least one recording together. Check body heights, floor
+alignment, facing direction, approach/contact moments, participant identity,
+head orientation where available, and any placeholder-optics placement. Record any approximation
+that is acceptable for the MVP.
 
 ### Gate to Phase 3
 
-Both testers agree that the application can be built, launched, and exercised as
-a standalone package on Linux, Windows 11 x64, and recent Apple Silicon macOS.
-Any platform issue that threatens later MVP deployment is resolved before the
-analysis engine is implemented.
+Both testers agree that the dataset organization and pairing are understood and
+that the application shows actual synchronized two-person motion. Known data
+and coordinate limitations are documented before beginning the analysis engine.
 
 ## Phase 3 — Geometry and Visibility Analysis Engine
 
@@ -219,7 +232,8 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 
 Review a small set of illustrated or printed synthetic scenarios and compare the
 expected result with the engine output. Agree on ambiguous conventions such as
-boundary inclusion and positive pitch/yaw before real data is introduced.
+boundary inclusion and positive pitch/yaw before visibility analysis is applied
+to the real recordings loaded in Phase 2.
 
 ### Gate to Phase 4
 
@@ -227,67 +241,7 @@ Both testers agree that the visibility definition is represented correctly and
 the synthetic results are explainable. Mathematical disagreements are resolved
 in tests and documentation before proceeding.
 
-## Phase 4 — EgoBody Discovery, Loading, and Coordinate Validation
-
-### Rationale
-
-Real-data integration carries a separate class of risk: paired-frame discovery,
-file-format variation, coordinate transforms, missing data, and accidental
-double transformation. It should be validated before it is coupled to final
-optical rendering or scoring UI.
-
-### Implementation goal
-
-Build the read-only EgoBody data pipeline and connect one representative
-recording to skeleton playback:
-
-- Discover recordings with matching participant motion and paired frames.
-- Display basic recording metadata and validation status.
-- Load and normalize a selected recording into compact contiguous NumPy arrays.
-- Establish a shared coordinate system without applying transforms twice.
-- Derive documented head pose, head-forward direction, eye-socket estimates, and
-  glasses transforms from the available data.
-- Mark missing or unusable frames invalid rather than silently fabricating data.
-- Write versioned derived caches only under `code-repo/.runtime/`.
-- Load and preprocess in a worker so the UI remains responsive.
-- Animate both real participant skeletons synchronously in the existing viewport.
-- Provide transformation and placement diagnostics needed for validation.
-
-### Completion criteria
-
-- At least one representative paired recording loads and plays from its compact
-  normalized representation.
-- Participant scale, floor height, separation, orientation, and contact moments
-  are physically plausible on manual inspection.
-- Every derived or approximated value is identified in metadata.
-- Cache invalidation accounts for source identity, transformation/schema version,
-  and relevant derivation rules.
-- A cache failure safely falls back to rebuilding outside the dataset.
-
-## Test Phase 4 — Real-Data Validation
-
-### Developer tests
-
-- Run discovery, pairing, normalization, cache, and invalid-frame integration
-  tests against a small representative fixture or bounded dataset sample.
-- Verify cold-load and cached-load behavior.
-- Audit filesystem activity and confirm the dataset remains unchanged.
-- Inspect diagnostic coordinate frames and numeric ranges.
-
-### Joint hands-on test
-
-Select and review at least one recording together. Check body heights, floor
-alignment, facing direction, approach/contact moments, participant identity,
-head orientation, and glasses/eye-socket placement. Record any approximation
-that is acceptable for the MVP.
-
-### Gate to Phase 5
-
-Both testers agree that the real motion is synchronized and physically plausible
-enough to support visibility analysis. Coordinate-system uncertainty is not
-carried forward silently.
-
-## Phase 5 — Final Glasses and EyeGlow Rendering
+## Phase 4 — Final Glasses and EyeGlow Rendering
 
 ### Rationale
 
@@ -319,7 +273,7 @@ Replace placeholder optics with final MVP rendering:
 - Camera containment changes only visual waveguide state and never participant
   scores.
 
-## Test Phase 5 — Optical Rendering Review
+## Test Phase 4 — Optical Rendering Review
 
 ### Developer tests
 
@@ -334,12 +288,12 @@ Inspect the glasses from several camera angles, exercise every optical control,
 toggle diagnostics, and deliberately move the camera into and out of individual
 frustums. Confirm that the visualization explains the underlying geometry.
 
-### Gate to Phase 6
+### Gate to Phase 5
 
 Both testers agree that optical geometry is correctly placed, understandable,
 and responsive.
 
-## Phase 6 — Integrated Bidirectional Visibility
+## Phase 5 — Integrated Bidirectional Visibility
 
 ### Rationale
 
@@ -371,7 +325,7 @@ summary results:
 - Invalid intervals are excluded from denominators and visibly distinguishable
   from valid-but-invisible intervals.
 
-## Test Phase 6 — Visibility Result Review
+## Test Phase 5 — Visibility Result Review
 
 ### Developer tests
 
@@ -388,13 +342,13 @@ Review several predicted visible and invisible moments in both directions. Use
 diagnostics to explain each outcome, and test whether parameter changes produce
 directionally sensible changes rather than merely plausible-looking animation.
 
-### Gate to Phase 7
+### Gate to Phase 6
 
 Both testers agree that representative visibility results are correct and
 explainable. Any suspected false positive or false negative is resolved or
 documented as an accepted MVP limitation.
 
-## Phase 7 — Complete Playback, Timeline, and Score Experience
+## Phase 6 — Complete Playback, Timeline, and Score Experience
 
 ### Rationale
 
@@ -428,7 +382,7 @@ Complete the primary application workflow:
 - A new user can select a recording and find a visibility event without developer
   guidance.
 
-## Test Phase 7 — End-to-End Usability Review
+## Test Phase 6 — End-to-End Usability Review
 
 ### Developer tests
 
@@ -444,65 +398,162 @@ event discovery, parameter adjustment, and score interpretation. Note confusing
 labels or controls, and verify that the interface never overstates geometric
 opportunity as actual perception.
 
-### Gate to Phase 8
+### Gate to Phase 7
 
 Both testers agree that the complete analysis workflow is coherent, synchronized,
 and understandable.
 
-## Phase 8 — Export, Packaging, and Complete MVP
+## Phase 7 — Complete Export Workflow
 
 ### Rationale
 
-Export and distribution cross-cut the stable application and should be finalized
-only after playback, rendering, state, and analysis behavior are settled.
+Finalize shareable output after playback, rendering, and analysis behavior are
+settled, so cross-platform validation can exercise the complete workflow.
 
 ### Implementation goal
 
-Finish the shareable output and release path:
-
-- Screenshot export with recording identity, relevant settings, and current
-  visibility context.
-- Numbered-frame animation export for a selected interval as the reliable
-  baseline.
-- Direct MP4 export through a separate FFmpeg process when available; otherwise
-  provide a clear frame-sequence result and conversion guidance.
-- Progress, cancellation, errors, and collision-safe output naming.
-- Diagnostic-overlay inclusion controlled by the user.
-- PyInstaller one-folder builds on each available target platform.
-- Release documentation covering launch, dataset selection, limitations,
-  supported outputs, and the read-only data policy.
-- A final audit against all acceptance criteria in `INTENT.md`.
+- Finish screenshot and MP4 export for representative recordings and selected
+  intervals, building on the Phase 1 export implementation.
+- Preserve the approved scene-only PNG capture and modal video settings workflow.
+- Provide progress, cancellation, clear errors, and safe overwrite handling.
+- Let the user control diagnostic-overlay inclusion in exported scenes.
+- Document supported outputs and relevant recording/settings context.
 
 ### Completion criteria
 
-- Still and animation/frame-sequence exports reproduce the selected scene and
-  visibility state correctly.
-- Export work does not freeze normal UI progress reporting and does not write to
-  the source dataset.
-- The packaged application launches and completes the core workflow on every
-  target platform claimed as supported.
-- All 20 MVP acceptance criteria in `INTENT.md` are either demonstrated or have
-  an explicitly agreed disposition.
-- Deferred features remain deferred unless both testers deliberately change the
-  MVP scope.
+- Screenshots and videos reproduce the selected scene and visibility state.
+- Export settings, selected interval, frame dimensions, and timing are respected.
+- Progress reporting remains responsive; cancellation preserves existing output.
+- Outputs and temporary files remain outside the source dataset.
 
-## Test Phase 8 — MVP Acceptance Test
+## Test Phase 7 — Export Review
+
+### Developer tests
+
+- Validate PNG and MP4 output, interval boundaries, dimensions, and timing.
+- Exercise cancellation, encoder failure, overwrite handling, and cleanup.
+- Confirm exports remain synchronized with analysis and rendered geometry.
+
+### Joint hands-on test
+
+Export stills and videos from a representative recording, inspect the results,
+and review the settings, progress, cancellation, and error experience.
+
+### Gate to Phase 8
+
+Both testers agree that the complete Linux workflow and exports are ready for
+native packaging and validation on the other target platforms.
+
+## Phase 8 — Cross-Platform Packaging and Validation
+
+### Rationale
+
+PyInstaller packages include platform-specific Python, Qt, VTK, and native
+libraries and therefore must be built and tested on their target operating
+systems. Deployment validation is deliberately deferred until the core workflow
+and exports are complete, so development can continue on Linux. Platform
+compatibility remains unverified until this phase; resolve any resulting issues
+before final polishing.
+
+### Implementation goal
+
+Package the complete application on Linux and build it natively on both
+additional MVP target platforms:
+
+- Windows 11 x64 using the available Windows development machine.
+- A recent macOS release on Apple Silicon using the available Mac.
+- Intel Macs are explicitly unsupported.
+- Use equivalent pinned application dependencies across all three platforms,
+  allowing only documented platform-specific differences.
+- Produce a PyInstaller one-folder package on each native target system; do not
+  cross-compile.
+- Document reproducible environment setup and build commands for each platform.
+- Make only the minimum platform-specific code or packaging changes required to
+  preserve the completed Linux workflow, analysis results, and exports.
+
+### Completion criteria
+
+- The packaged application launches outside the development environment on
+  Windows 11 x64 and recent macOS on Apple Silicon.
+- Recording discovery/loading, playback, optical controls, visibility analysis,
+  timeline, scores, screenshots, and MP4 export work on all three platforms.
+- Synthetic fixtures produce equivalent numeric analysis results across platforms.
+- Platform-specific fixes do not break the tested Linux package.
+- The exact OS version, CPU architecture, Python version, dependency versions,
+  build command, warnings, and result are recorded for all three platforms.
+- Any unsupported behavior is documented and does not conflict with the MVP
+  acceptance criteria.
+
+## Test Phase 8 — Cross-Platform Deployment Review
+
+### Developer tests
+
+- Create each package on its native operating system from a clean checkout or
+  documented clean environment.
+- Launch each package without relying on the development virtual environment.
+- Run the same startup, recording-loading, playback, camera, analysis, timeline,
+  screenshot, and MP4 export checks on Windows 11 x64, Apple Silicon macOS, and
+  Linux, using synthetic fixtures and a representative recording.
+- Check display scaling, transparency, high-resolution capture, and bundled FFmpeg.
+- Inspect packaged output for missing Qt or VTK plugins and unintended absolute
+  paths or undeclared runtime dependencies.
+- Confirm that outputs are written to permitted user-writable locations and that
+  no file is written under `egobody-data`.
+
+### Joint hands-on test
+
+Together, review the Windows 11 and Apple Silicon macOS builds using the same
+core workflow approved on Linux. Compare behavior and record platform-specific
+differences rather than accepting silent divergence.
+
+### Gate to Phase 9
+
+Both testers agree that the application can be built, launched, and exercised as
+a standalone package on Linux, Windows 11 x64, and recent Apple Silicon macOS.
+Any platform issue that blocks the core workflow is resolved before final
+polishing begins.
+
+## Phase 9 — Final Polishing and MVP Acceptance
+
+### Rationale
+
+Polish the application after native platform validation, so final refinements
+account for the behavior of all supported systems.
+
+### Implementation goal
+
+- Resolve usability issues found during end-to-end and cross-platform review.
+- Refine labels, layout, display scaling, feedback, and visual consistency.
+- Address measured responsiveness or stability issues in the completed workflow.
+- Finish release documentation covering launch, dataset selection, limitations,
+  supported outputs, and the read-only data policy.
+- Rebuild final packages and audit all acceptance criteria in `INTENT.md`.
+- Keep deferred features outside the MVP unless explicitly agreed otherwise.
+
+### Completion criteria
+
+- Final packages complete the core workflow on Linux, Windows 11 x64, and recent
+  Apple Silicon macOS.
+- Polishing changes preserve validated geometry, analysis, and export behavior.
+- All 20 MVP acceptance criteria in `INTENT.md` are demonstrated or have an
+  explicitly agreed disposition.
+- Remaining limitations are documented and accepted as non-blocking.
+
+## Test Phase 9 — Final MVP Acceptance Test
 
 ### Developer tests
 
 - Run the complete unit and integration suites from a clean environment.
-- Perform packaged-application launch and workflow smoke tests on the supported
-  Windows 11 x64, Apple Silicon macOS, and Linux targets.
-- Validate screenshot, frame-sequence, and MP4 paths where supported.
-- Audit generated files, logs, and caches and verify the source dataset is
-  unchanged.
-- Check documented dependency versions and reproducibility of the build.
+- Repeat packaged launch and core workflow smoke tests on all three platforms
+  after final changes, including screenshot and MP4 export.
+- Audit generated files, logs, and caches and verify the dataset is unchanged.
+- Check documented dependency versions and build reproducibility.
 
 ### Joint hands-on test
 
-Walk through the 20 acceptance criteria in `INTENT.md` using the packaged
-application and one or more representative recordings. Inspect exported output,
-review known limitations, and decide whether any remaining issue blocks the MVP.
+Walk through the 20 acceptance criteria in `INTENT.md` using final packaged
+applications and representative recordings. Inspect exports, review known
+limitations, and decide whether any remaining issue blocks the MVP.
 
 ### MVP completion gate
 
@@ -518,13 +569,14 @@ implementation stopped; approval follows the corresponding joint test phase.
 | Phase | Developer test | Joint test | Approved to proceed | Notes |
 |---|---|---|---|---|
 | 1 — Technical spike | Passed on Linux | Pending | No | Implementation and one-folder package ready; see [validation record](docs/PHASE1_VALIDATION.md). |
-| 2 — Cross-platform deployment | Not run | Not run | No | |
+| 2 — EgoBody inspection and playback | Not run | Not run | No | Inspect data and replace synthetic playback with a real paired recording. |
 | 3 — Analysis engine | Not run | Not run | No | |
-| 4 — EgoBody pipeline | Not run | Not run | No | |
-| 5 — Optical rendering | Not run | Not run | No | |
-| 6 — Integrated visibility | Not run | Not run | No | |
-| 7 — Timeline and UX | Not run | Not run | No | |
-| 8 — Export and MVP | Not run | Not run | No | |
+| 4 — Optical rendering | Not run | Not run | No | |
+| 5 — Integrated visibility | Not run | Not run | No | |
+| 6 — Timeline and UX | Not run | Not run | No | |
+| 7 — Export workflow | Not run | Not run | No | Builds on Phase 1 export refinements. |
+| 8 — Cross-platform packaging | Not run | Not run | No | Deferred until the complete Linux workflow is ready. |
+| 9 — Final polishing and MVP | Not run | Not run | No | |
 
 ## Scope-Change Rule
 
@@ -539,8 +591,8 @@ it as an immutable schedule.
 After the initial spike, the project owner requested visible save dialogs for
 screenshots and video, an inclusive two-handle export-range bar below playback,
 an **Export Video** button, and the entire recording selected by default.
-These changes bring MP4 encoding forward from Phase 8 without starting the
-remaining Phase 2 or Phase 8 work. The screenshot dialog saves PNG; video saves
+These changes bring MP4 encoding forward from Phase 7 without starting the
+remaining analysis-engine or export-workflow work. The screenshot dialog saves PNG; video saves
 H.264 MP4 via a bundled FFmpeg executable. Cancellation preserves existing output,
 and temporary frame files are removed. The synthetic-data and read-only dataset
 boundaries remain in force.
@@ -554,3 +606,23 @@ inclusive start/end frame fields, Full range, current/FHD/4K frame size,
 and duration. **Save Screenshot ...** remains a PNG-only scene capture at the
 current size. Default Linux filenames use the recording name in Videos/Pictures.
 This supersedes the range-bar UI above; it does not authorize later phase work.
+
+## Authorized phase reorder — 2026-09-18
+
+The project owner requested continued development on Linux, with cross-platform
+packaging toward the end and before a final polishing phase. The former Phase 2
+deployment spike is now Phase 8 and validates the complete application. Data inspection/loading,
+geometry analysis, optical rendering, integrated visibility, and timeline work occupy
+Phases 2–6; export completion is Phase 7; final polishing and acceptance are Phase 9.
+Windows 11 x64 and Apple Silicon macOS remain required MVP targets. Their native
+validation is deferred, not waived, and compatibility fixes may require revisiting
+earlier work. The MVP acceptance criteria and read-only dataset policy are unchanged.
+
+### Real-data playback first
+
+The project owner subsequently requested that dataset inspection and actual
+paired-person playback become Phase 2, with geometry and visibility mathematics
+moving to Phase 3. The immediate deliverable is evidence of how EgoBody data is
+organized and a real two-person recording replacing the synthetic demo in the
+viewport. This reorder does not require visibility scores in Phase 2 or change
+Phases 4–9.
