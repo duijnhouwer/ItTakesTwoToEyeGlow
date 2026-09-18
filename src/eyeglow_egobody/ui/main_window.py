@@ -38,7 +38,22 @@ class MainWindow(QMainWindow):
             return widget
         button('Reset camera',self.viewport.reset_view,camera)
         button('Fit participants',self.viewport.fit_participants,camera)
-        camera.addWidget(QLabel('Orbit: drag · Pan: Shift + drag · Zoom: scroll'))
+        self.orbit = QCheckBox('Orbit')
+        self.orbit.setToolTip('Automatically orbit around world Z, including while playback is paused.')
+        self.orbit.toggled.connect(self.controller.set_orbit_enabled)
+        camera.addWidget(self.orbit)
+        self.orbit_speed = QDoubleSpinBox()
+        self.orbit_speed.setRange(-360,360)
+        self.orbit_speed.setDecimals(1)
+        self.orbit_speed.setValue(5)
+        self.orbit_speed.setSuffix(' deg/s')
+        self.orbit_speed.setAccessibleName('Orbit speed in degrees per second')
+        self.orbit_speed.setToolTip('Orbit speed. Negative values reverse direction; zero stops rotation.')
+        self.orbit_speed.valueChanged.connect(self.controller.set_orbit_speed)
+        camera.addWidget(self.orbit_speed)
+        self.orbit.setChecked(True)
+        self.viewport.interactor.setToolTip(
+            'Orbit (upright): drag · Pan: Shift + drag · Zoom: scroll')
         camera.addStretch()
         camera.addWidget(QLabel('Placeholder spread (m)'))
         self.spread = QDoubleSpinBox()
@@ -102,6 +117,7 @@ class MainWindow(QMainWindow):
         controller = self.controller
         was_playing = controller.state.playing
         controller.state.playing = False
+        controller.orbit_suspended = True
         self.sync()
         destination, settings = None, None
         try:
@@ -115,6 +131,7 @@ class MainWindow(QMainWindow):
             else:
                 destination = choose_file(self, default_filename(controller.recording, False), False)
         finally:
+            controller.orbit_suspended = False
             controller.state.playing = was_playing
             controller.last = monotonic()
             self.sync()

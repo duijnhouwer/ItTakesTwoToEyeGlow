@@ -61,6 +61,7 @@ class FakeViewport(QWidget):
     def set_frame(self,frame,spread): pass
     def reset_view(self): pass
     def fit_participants(self): pass
+    def orbit_by(self,degrees): pass
     def capture_size(self): return (self.width(),self.height())
 
 

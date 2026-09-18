@@ -19,7 +19,8 @@ class Viewport(QtInteractor):
         super().__init__(parent, auto_update=False, multi_samples=0)
         self.recording = recording
         self.set_background('#172330')
-        self.enable_trackball_style()
+        # Azimuth/elevation orbit keeps world Z upright and does not roll.
+        self.enable_terrain_style(mouse_wheel_zooms=True, shift_pans=True)
         self.add_mesh(pv.Plane(i_size=5,j_size=4), color='#53606c', opacity=.3)
         self.add_axes(color='white')
         self.parts = []
@@ -61,6 +62,17 @@ class Viewport(QtInteractor):
         self.caption.SetText(2,f'Synthetic motion - Frame {frame+1}/300\nPlaceholder optics - no visibility scores')
         # Qt coalesces paints; an immediate render here would render twice
         # with the PyVistaQt 0.13 QOpenGLWidget paint path.
+        self.update()
+
+    def orbit_by(self, degrees):
+        """Rotate about world Z through the current camera target, without roll."""
+        angle = np.deg2rad(degrees % 360)
+        c, s = np.cos(angle), np.sin(angle)
+        offset = np.array(self.camera.position) - np.array(self.camera.focal_point)
+        rotated = np.array([c*offset[0]-s*offset[1], s*offset[0]+c*offset[1], offset[2]])
+        self.camera.position = np.array(self.camera.focal_point) + rotated
+        self.camera.up = (0,0,1)
+        self.reset_camera_clipping_range()
         self.update()
 
     def reset_view(self):

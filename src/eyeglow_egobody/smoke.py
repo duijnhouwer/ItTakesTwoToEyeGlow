@@ -29,6 +29,7 @@ def start_smoke(app,window,output):
                 raise TimeoutError('Smoke test exceeded 180 seconds')
             assert tuple(id(a) for a in window.viewport.stable_actors) == actors
             if state['stage'] == 0:
+                assert window.viewport.iren.style.IsA('vtkInteractorStyleTerrain')
                 assert (controller.export_start,controller.export_end) == (0,299)
                 from eyeglow_egobody.ui.export_dialog import VideoExportDialog
                 dialog = VideoExportDialog(controller.recording,window.viewport.capture_size(),parent=window)

@@ -21,8 +21,14 @@ assets are required. Windows and macOS deployment are Phase 2, not yet validated
 
 ## Try the prototype
 
-- Drag in the viewport to orbit, Shift-drag to pan, and scroll to zoom.
+- Drag in the viewport for upright orbit: horizontal motion turns around world Z,
+  vertical motion changes elevation, and camera roll is disabled. Shift-drag pans;
+  scrolling zooms. This uses PyVista/VTK terrain-style navigation.
 - Reset camera restores the initial direction; Fit participants retains direction.
+- **Orbit** beside Fit participants automatically turns the camera around world Z
+  through its current target, without roll. It starts enabled at **5 deg/s** and
+  also runs while motion playback is paused. Untick it to stop; negative speeds
+  reverse direction. Automatic orbit pauses during save dialogs and exports.
 - Play/Pause, Step, Start, and the slider control the same frame state.
 - Try 0.25×, 0.5×, 1×, and 2× playback; Loop controls the end-of-sequence behavior.
 - Change **Placeholder spread** to update both head-locked volumes immediately.

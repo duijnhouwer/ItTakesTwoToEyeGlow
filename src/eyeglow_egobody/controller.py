@@ -24,6 +24,9 @@ class Controller(QObject):
         self.state = PlaybackState(recording.frame_count, recording.fps)
         self.export_start, self.export_end = 0, recording.frame_count-1
         self.spread = .35
+        self.orbit_enabled = False
+        self.orbit_speed = 5.0
+        self.orbit_suspended = False
         self.writer = ImageWriter()
         self.job = None
         self.last = monotonic()
@@ -53,6 +56,14 @@ class Controller(QObject):
             self.spread = value
             self.refresh()
 
+    def set_orbit_enabled(self, enabled):
+        self.orbit_enabled = bool(enabled)
+        self.last = monotonic()
+
+    def set_orbit_speed(self, speed):
+        self.orbit_speed = float(speed)
+        self.last = monotonic()
+
     def set_export_range(self, start, end):
         if not 0 <= start <= end < self.recording.frame_count:
             raise ValueError('The export range must be inside the recording.')
@@ -65,7 +76,13 @@ class Controller(QObject):
         elapsed, self.last = now-self.last, now
         if self.job:
             self._export_tick()
-        elif self.state.playing:
+        else:
+            if self.orbit_enabled and not self.orbit_suspended:
+                self.viewport.orbit_by(self.orbit_speed * elapsed)
+            self._advance_playback(elapsed)
+
+    def _advance_playback(self, elapsed):
+        if self.state.playing:
             previous = self.state.frame
             self.state.advance(elapsed)
             if previous != self.state.frame:

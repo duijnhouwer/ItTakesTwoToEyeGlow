@@ -187,3 +187,29 @@ def test_screenshot_keeps_original_scene_pixel_size(controller):
     finish_job(controller)
     with Image.open(path) as image:
         assert image.size == (35,21)
+
+
+def test_auto_orbit_uses_elapsed_seconds_and_works_while_paused(controller,monkeypatch):
+    from eyeglow_egobody import controller as module
+    clock = [100.0]
+    monkeypatch.setattr(module,'monotonic',lambda: clock[0])
+    angles = []
+    controller.viewport.orbit_by = angles.append
+    controller.set_orbit_enabled(True)
+    clock[0] += .25
+    controller.tick()
+    assert angles == [1.25]
+    assert not controller.state.playing
+    controller.set_orbit_speed(-20)
+    clock[0] += .5
+    controller.tick()
+    assert angles[-1] == -10
+    controller.orbit_suspended = True
+    clock[0] += 1
+    controller.tick()
+    assert len(angles) == 2
+    controller.orbit_suspended = False
+    controller.set_orbit_enabled(False)
+    clock[0] += 1
+    controller.tick()
+    assert len(angles) == 2
