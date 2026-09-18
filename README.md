@@ -90,6 +90,11 @@ PYINSTALLER_CONFIG_DIR="$PWD/.runtime/pyinstaller" .venv/bin/python -m PyInstall
 ./dist/EyeGlowEgoBody/EyeGlowEgoBody
 ```
 
+The packaged executable contains a snapshot of the Python source. Rebuild it after
+source changes, especially changes to the settings format: the source app and
+packaged app read the same `config/settings_panel.json`. Validate the rebuilt
+executable with the packaged smoke command above before handing off a change.
+
 The smoke test drives the actual event loop, exercises playback speeds, scrubbing,
 camera changes, live geometry, actor reuse, native-size screenshot, FHD/4K captures, and a 60-frame FHD MP4 export at 24 fps, then
 exits with a machine-readable report. It is not a substitute for hands-on review.

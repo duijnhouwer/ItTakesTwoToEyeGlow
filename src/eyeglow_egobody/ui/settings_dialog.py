@@ -1,7 +1,7 @@
 """Editable values generated from the settings JSON definitions."""
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QLabel, QDialogButtonBox
-from eyeglow_egobody.model.panel_settings import validate_value
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QFormLayout, QLineEdit, QLabel, QDialogButtonBox, QGroupBox, QScrollArea, QWidget
+from eyeglow_egobody.model.panel_settings import validate_value, format_value
 
 
 class SettingsDialog(QDialog):
@@ -12,15 +12,36 @@ class SettingsDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(420)
         layout = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
         form = QFormLayout()
-        layout.addLayout(form)
+        content_layout.addLayout(form)
+        scroll.setWidget(content)
+        layout.addWidget(scroll)
+        self.resize(560, 700)
         self.fields = {}
-        for key, spec in store.document['settings'].items():
-            field = QLineEdit(f"{spec['value']:.{spec['precision']}f}")
-            field.setObjectName(key)
-            field.setAccessibleName(spec['display_name'])
-            form.addRow(spec['display_name'], field)
-            self.fields[key] = field
+        for key, entry in store.document['settings'].items():
+            if 'display_name' in entry:
+                entries, target = {key: entry}, form
+            else:
+                group = QGroupBox(key.replace('_', ' ').title())
+                group.setObjectName(key)
+                target = QFormLayout(group)
+                content_layout.addWidget(group)
+                entries = entry
+            for name, spec in entries.items():
+                field = QLineEdit(format_value(spec, spec['value']))
+                field.setObjectName(name)
+                field.setAccessibleName(spec['display_name'])
+                if 'choices' in spec:
+                    field.setToolTip(', '.join(spec['choices']))
+                else:
+                    field.setToolTip(f"Range: {spec['min']} to {spec['max']}")
+                target.addRow(spec['display_name'], field)
+                self.fields[name] = field
+        content_layout.addStretch()
         self.error = QLabel()
         self.error.setTextFormat(Qt.TextFormat.PlainText)
         self.error.setWordWrap(True)
@@ -36,14 +57,14 @@ class SettingsDialog(QDialog):
 
     def reset_to_factory(self):
         for key, field in self.fields.items():
-            spec = self.store.document['settings'][key]
-            field.setText(f"{spec['factory_default']:.{spec['precision']}f}")
+            spec = self.store.specs[key]
+            field.setText(format_value(spec, spec['factory_default']))
         self.error.clear()
 
     def accept(self):
         values = {}
         for key, field in self.fields.items():
-            spec = self.store.document['settings'][key]
+            spec = self.store.specs[key]
             try:
                 values[key] = validate_value(spec, field.text().strip())
             except ValueError as exc:

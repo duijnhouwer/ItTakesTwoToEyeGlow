@@ -12,12 +12,115 @@
     },
     "eye_relief_mm": {
       "display_name": "Eye relief (mm)",
-      "value": 13.0,
+      "value": 12.0,
       "default": 13.0,
       "min": 0.0,
       "max": 100.0,
       "precision": 1,
       "factory_default": 13.0
+    },
+    "waveguide": {
+      "expander_width_mm": {
+        "display_name": "Eyebox expander width (mm)",
+        "value": 20,
+        "default": 20,
+        "min": 0.1,
+        "max": 100,
+        "precision": 2,
+        "factory_default": 20
+      },
+      "expander_height_mm": {
+        "display_name": "Eyebox expander height (mm)",
+        "value": 20,
+        "default": 20,
+        "min": 0.1,
+        "max": 100,
+        "precision": 2,
+        "factory_default": 20
+      },
+      "expander_offset_right_mm": {
+        "display_name": "Center offset right (mm)",
+        "value": 0,
+        "default": 0,
+        "min": -100,
+        "max": 100,
+        "precision": 2,
+        "factory_default": 0
+      },
+      "expander_offset_up_mm": {
+        "display_name": "Center offset up (mm)",
+        "value": 0,
+        "default": 0,
+        "min": -100,
+        "max": 100,
+        "precision": 2,
+        "factory_default": 0
+      },
+      "diagonal_fov_deg": {
+        "display_name": "Diagonal FOV (deg)",
+        "value": 20,
+        "default": 20,
+        "min": 0.1,
+        "max": 179,
+        "precision": 2,
+        "factory_default": 20
+      },
+      "horizontal_vertical_fov_ratio": {
+        "display_name": "Horizontal / vertical FOV ratio (1 = 1:1)",
+        "value": 1,
+        "default": 1,
+        "min": 0.01,
+        "max": 100,
+        "precision": 3,
+        "factory_default": 1
+      },
+      "ui_line_azimuth_deg": {
+        "display_name": "UI line azimuth (deg)",
+        "value": 0,
+        "default": 0,
+        "min": -88,
+        "max": 88,
+        "precision": 2,
+        "factory_default": 0
+      },
+      "ui_line_elevation_deg": {
+        "display_name": "UI line elevation (deg)",
+        "value": 0,
+        "default": 0,
+        "min": -88,
+        "max": 88,
+        "precision": 2,
+        "factory_default": 0
+      },
+      "maximum_distance_m": {
+        "display_name": "Maximum analysis distance (m)",
+        "value": 5,
+        "default": 5,
+        "min": 0.01,
+        "max": 100,
+        "precision": 2,
+        "factory_default": 5
+      },
+      "display_mode": {
+        "display_name": "Display mode",
+        "value": "binocular",
+        "default": "binocular",
+        "factory_default": "binocular",
+        "choices": [
+          "monocular_left",
+          "monocular_right",
+          "binocular"
+        ]
+      }
+    },
+    "head_facing_threshold_deg": {
+      "display_name": "Receiver head-facing threshold (deg)",
+      "value": 90,
+      "default": 90,
+      "min": 0,
+      "max": 180,
+      "precision": 2,
+      "factory_default": 90
     }
   }
 }

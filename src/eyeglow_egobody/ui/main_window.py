@@ -168,6 +168,7 @@ class MainWindow(QMainWindow):
         dialog = SettingsDialog(store, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self.panel_settings = store
+            self.controller.optical_parameters = store.optical_parameters
             self.viewport.optical_settings = store.values
             self.controller.refresh()
             self.statusBar().showMessage('Settings saved')

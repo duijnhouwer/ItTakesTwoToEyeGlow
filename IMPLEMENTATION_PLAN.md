@@ -205,7 +205,7 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 - Validated shared optical-parameter model with explicit units and defaults.
 - Glasses coordinate frames and documented left/right eye and waveguide
   conventions.
-- Chief-ray construction from pitch and yaw.
+- UI-line construction from azimuth and elevation (formerly chief-ray yaw/pitch).
 - Rectangular waveguide near planes and rectangular frustum construction.
 - Stable point-in-frustum tests, including boundary behavior.
 - Monocular-left, monocular-right, and binocular activation.
@@ -230,7 +230,7 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 
 ### Developer tests
 
-- Run unit tests for chief rays, frustum planes, containment boundaries, display
+- Run unit tests for UI lines, frustum planes, containment boundaries, display
   modes, facing thresholds, invalid frames, state reduction, scores, and events.
 - Add invariance checks for rigid transforms and participant swapping where
   applicable.
@@ -240,7 +240,7 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 
 Review a small set of illustrated or printed synthetic scenarios and compare the
 expected result with the engine output. Agree on ambiguous conventions such as
-boundary inclusion and positive pitch/yaw before visibility analysis is applied
+boundary inclusion and positive azimuth/elevation before visibility analysis is applied
 to the real recordings loaded in Phase 2.
 
 ### Gate to Phase 4
@@ -265,9 +265,9 @@ Replace placeholder optics with final MVP rendering:
   pantoscopic tilt of 5 degrees.
 - Independently addressable left and right rectangular waveguides.
 - Rendered frustums generated from analysis geometry.
-- Chief-ray and coordinate-frame diagnostics.
+- UI-line and coordinate-frame diagnostics.
 - Monocular-left, monocular-right, and binocular display modes.
-- Controls for waveguide size, horizontal/vertical FOV, chief-ray pitch/yaw,
+- Controls using the shared waveguide size/offset, diagonal FOV and H/V ratio, UI-line azimuth/elevation,
   maximum distance, opacity, visibility toggles, and reset to defaults.
 - Immediate current-frame geometry updates when parameters change.
 - Render-camera containment that turns each waveguide white independently when
@@ -635,6 +635,9 @@ account for the behavior of all supported systems.
 
 ### Implementation goal
 
+- Replace the temporary Waveguide text fields with a graphical editor for eyebox
+  expander width/height and lens-relative center offset, diagonal FOV and H/V ratio,
+  and UI-line azimuth/elevation. Preserve the validated settings model and units.
 - Resolve usability issues found during end-to-end and cross-platform review.
 - Refine labels, layout, display scaling, feedback, and visual consistency.
 - Address measured responsiveness or stability issues in the completed workflow.
@@ -683,7 +686,7 @@ implementation stopped; approval follows the corresponding joint test phase.
 |---|---|---|---|---|
 | 1 — Technical spike | Passed on Linux | Complete | Yes | Completed 2026-09-18; see Phase 1 completion note and [validation record](docs/PHASE1_VALIDATION.md). |
 | 2 — EgoBody inspection and playback | 87 tests and real-playback/package checks passed | Accepted by owner | Yes | Completed 2026-09-18 with explicit owner sign-off; documented floor limitation carried forward. See [inspection and validation](docs/PHASE2_DATA_INSPECTION.md). |
-| 3 — Analysis engine | Not run | Not run | No | |
+| 3 — Analysis engine | 148 tests passed on Linux | Pending | No | Numeric engine and grouped settings implemented; see [conventions and synthetic review](docs/PHASE3_VALIDATION.md). |
 | 4 — Optical rendering | Not run | Not run | No | |
 | 5 — Integrated visibility | Not run | Not run | No | |
 | 6 — Timeline and UX | Not run | Not run | No | |
@@ -803,3 +806,20 @@ agreement with the owner. The minimum-joint rule remains in place for now, despi
 unsatisfactory placement in one reviewed example. Future investigation should
 account for arbitrary body postures, jumping, and low fitted-joint outliers;
 no new floor-estimation implementation is authorized by this deferral.
+
+## Authorized Phase 3 waveguide settings — 2026-09-18
+
+The owner requested Phase 3 implementation plus editable waveguide parameters in
+`config/settings_panel.json`, grouped under `settings.waveguide`. Defaults are a
+20 × 20 mm eyebox expander and a 20° diagonal FOV with horizontal/vertical angular
+ratio 1:1. Two center offsets describe right/up displacement relative to each
+lens center, defaulting to zero. The UI line replaces the name chief ray; its
+azimuth and elevation default to zero. Horizontal and vertical FOV are derived
+internally. Maximum distance and display mode share the Waveguide group; the
+receiver head-facing threshold remains outside that group. All controls initially
+use simple edit fields, with the graphical editor explicitly deferred to Phase 10.
+
+The Phase 3 numeric implementation and automated tests are ready for review.
+See [Phase 3 conventions and synthetic scenarios](docs/PHASE3_VALIDATION.md).
+This does not mark the joint test complete or begin Phase 4 rendering / Phase 5
+real-recording score integration.

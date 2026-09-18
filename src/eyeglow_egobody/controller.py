@@ -7,6 +7,7 @@ import os
 import logging
 from PySide6.QtCore import QObject, QTimer, Signal
 from eyeglow_egobody.model.state import PlaybackState
+from eyeglow_egobody.model.parameters import OpticalParameters
 from eyeglow_egobody.model.export_settings import VideoSettings
 from eyeglow_egobody.export.animation import ImageWriter, VideoStream
 from eyeglow_egobody.export.paths import safe_destination
@@ -27,6 +28,7 @@ class Controller(QObject):
         self.output_root = output_root
         self.state = PlaybackState(recording.frame_count, recording.fps)
         self.export_start, self.export_end = 0, recording.frame_count-1
+        self.optical_parameters = OpticalParameters.from_settings(getattr(viewport, "optical_settings", {}))
         self.spread = .35
         self.orbit_enabled = False
         self.orbit_speed = 5.0

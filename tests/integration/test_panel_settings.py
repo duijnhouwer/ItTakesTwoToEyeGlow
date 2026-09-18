@@ -11,7 +11,9 @@ from eyeglow_egobody.ui.settings_dialog import SettingsDialog
 def store(tmp_path):
     path = tmp_path/'settings_panel.json'
     path.write_bytes(settings_path().read_bytes())
-    return PanelSettings(path)
+    store = PanelSettings(path)
+    store.save({key: spec["factory_default"] for key, spec in store.specs.items()})
+    return store
 
 
 def test_settings_dialog_persists_values_and_preserves_metadata(qt_app, store):
@@ -79,6 +81,7 @@ def test_file_settings_updates_current_view(qt_app, store, monkeypatch, tmp_path
     monkeypatch.setattr(main_window, 'PanelSettings', lambda *args: store)
     def save(dialog):
         dialog.fields['eye_relief_mm'].setText('19')
+        dialog.fields['expander_width_mm'].setText('28')
         dialog.accept()
         return dialog.result()
     monkeypatch.setattr(SettingsDialog, 'exec', save)
@@ -88,6 +91,8 @@ def test_file_settings_updates_current_view(qt_app, store, monkeypatch, tmp_path
         before = window.viewport.refreshes
         window.settings_action.trigger()
         assert window.viewport.optical_settings['eye_relief_mm'] == 19
+        assert window.controller.optical_parameters.eye_relief_mm == 19
+        assert window.controller.optical_parameters.expander_width_mm == 28
         assert window.viewport.refreshes == before+1
         assert PanelSettings(store.path).values['eye_relief_mm'] == 19
     finally:
@@ -128,7 +133,7 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
 
 @pytest.mark.parametrize('save', [False, True])
 def test_factory_reset_is_staged_until_saved(qt_app, store, save):
-    store.save({'eyeball_radius_mm':30, 'eye_relief_mm':20})
+    store.save({**store.values, 'eyeball_radius_mm':30, 'eye_relief_mm':20})
     before = store.path.read_bytes()
     dialog = SettingsDialog(store)
     dialog.fields['eye_relief_mm'].setText('invalid')
@@ -143,7 +148,7 @@ def test_factory_reset_is_staged_until_saved(qt_app, store, save):
     if save:
         dialog.accept()
         loaded = PanelSettings(store.path)
-        assert loaded.values == {'eyeball_radius_mm':12, 'eye_relief_mm':13}
+        assert loaded.values == {key: spec['factory_default'] for key, spec in loaded.specs.items()}
         assert loaded.document['settings']['eyeball_radius_mm']['factory_default'] == 12
     else:
         dialog.reject()
@@ -161,4 +166,57 @@ def test_factory_defaults_are_validated_and_distinct_from_default(qt_app, store)
     document['settings']['eye_relief_mm']['factory_default'] = 101
     store.path.write_text(json.dumps(document))
     with pytest.raises(ValueError, match='between'):
+        PanelSettings(store.path)
+
+
+def test_waveguide_group_edits_persist_and_derive_fov(qt_app, store):
+    from PySide6.QtWidgets import QGroupBox
+    dialog = SettingsDialog(store)
+    assert dialog.findChild(QGroupBox, 'waveguide').title() == 'Waveguide'
+    changes = dict(expander_width_mm='24.5', expander_height_mm='18',
+                   expander_offset_right_mm='-2', expander_offset_up_mm='3',
+                   diagonal_fov_deg='30', horizontal_vertical_fov_ratio='2',
+                   ui_line_azimuth_deg='5', ui_line_elevation_deg='-4',
+                   maximum_distance_m='4', display_mode='monocular_left')
+    for key, value in changes.items():
+        dialog.fields[key].setText(value)
+    dialog.accept()
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    loaded = PanelSettings(store.path)
+    p = loaded.optical_parameters
+    assert p.horizontal_fov / p.vertical_fov == pytest.approx(2)
+    assert p.active_eyes == (True, False)
+    assert p.expander_width_mm == 24.5
+    assert p.ui_line_elevation_deg == -4
+    for key in changes:
+        assert loaded.document['settings']['waveguide'][key]['value'] == loaded.values[key]
+    dialog = SettingsDialog(loaded)
+    dialog.factory_reset.click()
+    dialog.accept()
+    assert loaded.optical_parameters.expander_width_mm == 20
+    assert loaded.optical_parameters.diagonal_fov_deg == 20
+    assert loaded.optical_parameters.horizontal_vertical_fov_ratio == 1
+    assert loaded.optical_parameters.display_mode == 'binocular'
+
+
+@pytest.mark.parametrize('key,value', [('expander_width_mm','0'),('diagonal_fov_deg','180'),
+    ('horizontal_vertical_fov_ratio','1:1'),('horizontal_vertical_fov_ratio','0'),
+    ('ui_line_elevation_deg','89'),('display_mode','invalid')])
+def test_waveguide_invalid_edits_are_atomic(qt_app, store, key, value):
+    before = store.path.read_bytes()
+    dialog = SettingsDialog(store)
+    dialog.fields[key].setText(value)
+    dialog.accept()
+    assert dialog.result() == QDialog.DialogCode.Rejected
+    assert dialog.error.text()
+    assert store.path.read_bytes() == before
+
+
+def test_json_metadata_cannot_override_physical_validation(store):
+    document = json.loads(store.path.read_text())
+    spec = document['settings']['waveguide']['diagonal_fov_deg']
+    spec['max'] = 360
+    spec['value'] = 200
+    store.path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match='diagonal_fov'):
         PanelSettings(store.path)
