@@ -58,8 +58,8 @@ assets are required. Windows and macOS deployment are Phase 2, not yet validated
   export replaces the confirmed destination only after encoding succeeds.
 
 FFmpeg is bundled via `imageio-ffmpeg`; no separate encoder installation is needed.
-PNG staging files are temporary and removed after completion, cancellation, or
-failure. The synthetic prototype uses `synthetic_motion` as its recording name.
+Video frames stream directly into FFmpeg without intermediate PNG files.
+Temporary output is removed after completion, cancellation, or failure. The synthetic prototype uses `synthetic_motion` as its recording name.
 Dataset paths and symlinks into them are rejected. `--output-dir` selects the
 output directory for automated smoke tests, not the interactive save dialogs.
 
@@ -87,8 +87,8 @@ The project follows [ARCHITECTURE.md](ARCHITECTURE.md),
 
 `model/` contains NumPy-only synthetic motion and playback state. `controller.py`
 owns session state; `ui/` forwards controls; `rendering/` owns persistent VTK actors;
-`export/` stages captured images in a bounded background worker and runs FFmpeg
-in a separate process. Rendering and
+`export/` writes screenshots and streams RGB video frames through a bounded
+background worker into a separate FFmpeg process. Rendering and
 capture stay on the Qt thread. `analysis/` and `egobody/` reserve the later-phase
 package boundaries. All synthetic head frames and shapes are approximations.
 

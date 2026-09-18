@@ -7,7 +7,7 @@ import os
 from PySide6.QtCore import QObject, QTimer, Signal
 from eyeglow_egobody.model.state import PlaybackState
 from eyeglow_egobody.model.export_settings import VideoSettings
-from eyeglow_egobody.export.animation import ImageWriter, encode_video
+from eyeglow_egobody.export.animation import ImageWriter, VideoStream
 from eyeglow_egobody.export.paths import safe_destination
 
 
@@ -109,7 +109,7 @@ class Controller(QObject):
             frames = range(self.export_start, self.export_end+1) if video else [self.state.frame]
             self.job = dict(temporary=temporary, folder=Path(temporary.name), destination=destination,
                             frames=frames, video=video, settings=settings or VideoSettings(fps=self.recording.fps),
-                            screenshot_size=self.viewport.capture_size() if not video else None, index=0, future=None, encoding=False,
+                            screenshot_size=self.viewport.capture_size() if not video else None, index=0, future=None, encoding=False, stream=None,
                             overwrite=overwrite, saved_frame=self.state.frame,
                             saved_playing=self.state.playing, cancelled=Event())
             self.state.playing = False
@@ -122,6 +122,8 @@ class Controller(QObject):
     def cancel_export(self):
         if self.job:
             self.job['cancelled'].set()
+            if self.job['stream'] is not None:
+                self.job['stream'].abort()
 
     def _export_tick(self):
         job = self.job
@@ -145,9 +147,8 @@ class Controller(QObject):
             if job['index'] == len(job['frames']):
                 if job['video']:
                     job['encoding'] = True
-                    self.status.emit('Encoding MP4 video…')
-                    job['future'] = self.writer.pool.submit(
-                        encode_video, job['folder'], job['settings'].fps, job['cancelled'], job['settings'].quality)
+                    self.status.emit('Finalizing MP4 video…')
+                    job['future'] = self.writer.pool.submit(job['stream'].finish)
                 else:
                     self._commit_export(job['folder']/'frame_00000.png')
                 return
@@ -155,7 +156,12 @@ class Controller(QObject):
             self.refresh()
             size = job['settings'].size if job['video'] else job['screenshot_size']
             pixels = self.viewport.capture(size) if size else self.viewport.capture()
-            job['future'] = self.writer.submit(pixels, job['folder']/f"frame_{job['index']:05d}.png")
+            if job['video']:
+                if job['stream'] is None:
+                    job['stream'] = VideoStream(job['folder'], job['settings'], job['cancelled'])
+                job['future'] = self.writer.pool.submit(job['stream'].write, pixels)
+            else:
+                job['future'] = self.writer.submit(pixels, job['folder']/'frame_00000.png')
         except CancelledError:
             self._finish_export('Export cancelled')
         except Exception as exc:
@@ -174,6 +180,8 @@ class Controller(QObject):
 
     def _finish_export(self, message):
         job, self.job = self.job, None
+        if job['stream'] is not None:
+            job['stream'].close()
         job['temporary'].cleanup()
         self.state.seek(job['saved_frame'])
         self.state.playing = job['saved_playing']
@@ -187,5 +195,7 @@ class Controller(QObject):
         self.cancel_export()
         self.writer.close()
         if self.job:
+            if self.job['stream'] is not None:
+                self.job['stream'].close()
             self.job['temporary'].cleanup()
             self.job = None

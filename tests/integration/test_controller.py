@@ -139,8 +139,6 @@ def test_encoder_failure_preserves_existing_destination(controller, monkeypatch)
     controller.set_export_range(0,0)
     controller.export_video(destination, overwrite=True)
     controller._export_tick()
-    controller.job['future'].result(timeout=5)
-    controller._export_tick()
     try:
         controller.job['future'].result(timeout=5)
     except FileNotFoundError:
@@ -213,3 +211,48 @@ def test_auto_orbit_uses_elapsed_seconds_and_works_while_paused(controller,monke
     clock[0] += 1
     controller.tick()
     assert len(angles) == 2
+
+
+def test_stream_has_no_png_staging_and_pads_odd_size(controller):
+    from imageio_ffmpeg import read_frames, count_frames_and_secs
+    from eyeglow_egobody.model.export_settings import VideoSettings
+    controller.set_export_range(0,2)
+    path = controller.output_root/'odd.mp4'
+    controller.export_video(path, settings=VideoSettings((35,21),30,90))
+    controller._export_tick()
+    controller.job['future'].result(timeout=5)
+    assert not list(controller.job['folder'].glob('*.png'))
+    finish_job(controller)
+    reader = read_frames(str(path))
+    assert next(reader)['size'] == (36,22)
+    reader.close()
+    assert count_frames_and_secs(str(path))[0] == 3
+
+
+def test_close_during_stream_preserves_destination(controller):
+    path = controller.output_root/'existing.mp4'
+    path.write_bytes(b'original')
+    controller.export_video(path, overwrite=True)
+    controller._export_tick()
+    controller.close()
+    assert path.read_bytes() == b'original'
+    assert not list(controller.output_root.glob('.eyeglow-*'))
+
+
+def test_stream_preserves_rgb_colors_and_frame_order(controller):
+    from imageio_ffmpeg import read_frames
+    colors = [(230,20,20), (20,230,20), (20,20,230)]
+    def capture(size=None):
+        return np.full((16,16,3), colors[controller.viewport.frame], dtype=np.uint8)
+    controller.viewport.capture = capture
+    controller.set_export_range(0,2)
+    path = controller.output_root/'colors.mp4'
+    controller.export_video(path)
+    finish_job(controller)
+    reader = read_frames(str(path))
+    next(reader)
+    frames = list(reader)
+    assert len(frames) == 3
+    for frame, color in zip(frames, colors):
+        pixels = np.frombuffer(frame, dtype=np.uint8).reshape(16,16,3)
+        assert np.allclose(pixels.mean(axis=(0,1)), color, atol=5)
