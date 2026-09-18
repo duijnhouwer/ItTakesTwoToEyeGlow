@@ -1,8 +1,8 @@
 from time import monotonic
-from PySide6.QtCore import Qt, QSignalBlocker
+from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
-                               QMessageBox,QDialog)
+                               QMessageBox,QDialog,QStyle)
 from eyeglow_egobody.model.recording import synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.controller import Controller
@@ -64,18 +64,23 @@ class MainWindow(QMainWindow):
         camera.addWidget(self.spread)
         row = QHBoxLayout()
         controls_layout.addLayout(row)
-        self.jump_start = button('⏮',lambda:self.controller.seek(0),row,'Jump to Start')
-        self.previous_frame = button('◀ Step',lambda:self.controller.seek(self.controller.state.frame-1),row,'Previous Frame')
-        self.play = button('▶',self.controller.toggle,row,'Play/Pause')
-        self.next_frame = button('Step ▶',lambda:self.controller.seek(self.controller.state.frame+1),row,'Next Frame')
+        self.jump_start = button('',lambda:self.controller.seek(0),row,'Jump to Start')
+        self.previous_frame = button('−1',lambda:self.controller.seek(self.controller.state.frame-1),row,'Previous Frame')
+        self.play = button('',self.controller.toggle,row,'Play/Pause')
+        self.next_frame = button('+1',lambda:self.controller.seek(self.controller.state.frame+1),row,'Next Frame')
         playback_buttons = (self.jump_start, self.previous_frame, self.play, self.next_frame)
-        # Include both glyphs when sizing so toggling playback cannot change height.
+        self._play_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
+        self._pause_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause)
+        self.jump_start.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipBackward))
+        self.play.setIcon(self._play_icon)
+        for widget in (self.jump_start, self.play):
+            widget.setIconSize(QSize(14,14))
         height = max(widget.sizeHint().height() for widget in playback_buttons)
-        self.play.setText('⏸')
-        height = max(height, self.play.sizeHint().height())
-        self.play.setText('▶')
+        # Fit the numeric labels and equally sized icons with modest padding.
+        width = max(14, *(widget.fontMetrics().horizontalAdvance(label)
+                         for widget in playback_buttons for label in ('−1', '+1'))) + 16
         for widget in playback_buttons:
-            widget.setFixedHeight(height)
+            widget.setFixedSize(width, height)
         self.slider = QSlider(Qt.Orientation.Horizontal)
         self.slider.setRange(0,recording.frame_count-1)
         self.slider.valueChanged.connect(self.controller.seek)
@@ -146,7 +151,7 @@ class MainWindow(QMainWindow):
         with QSignalBlocker(self.slider):
             self.slider.setValue(state.frame)
         self.counter.setText(f'{state.frame+1} / {state.frame_count}')
-        self.play.setText('⏸' if state.playing else '▶')
+        self.play.setIcon(self._pause_icon if state.playing else self._play_icon)
         self.play.setAccessibleName('Pause' if state.playing else 'Play')
         busy = self.controller.job is not None
         if busy and self._export_size_limits is None:
