@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# EyeGlow development and generated outputs
+.runtime/
+exports/
+.venv/
+!eyeglow.spec
