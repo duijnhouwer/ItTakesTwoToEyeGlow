@@ -5,13 +5,14 @@ import numpy as np
 from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
-                               QMessageBox,QDialog,QStyle,QFileDialog,QTextEdit)
+                               QMessageBox,QDialog,QStyle,QFileDialog,QTextEdit,QDockWidget)
 from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.runtime_paths import default_models
 from eyeglow_egobody.controller import Controller
 from eyeglow_egobody.model.panel_settings import PanelSettings
 from eyeglow_egobody.ui.settings_dialog import SettingsDialog
+from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
 
 class MainWindow(QMainWindow):
@@ -29,11 +30,14 @@ class MainWindow(QMainWindow):
         title = QLabel('EyeGlow EgoBody · Paired motion playback')
         title.setStyleSheet('font-size: 21px; font-weight: bold; padding: 8px')
         layout.addWidget(title)
-        layout.addWidget(QLabel('Placeholder glasses and frustums · No visibility analysis'))
+        layout.addWidget(QLabel('Waveguide geometry and current-frame potential visibility · File → Settings to edit optics'))
         browser = QHBoxLayout()
         self.recordings = QComboBox()
         self.recordings.setMinimumContentsLength(35)
         browser.addWidget(self.recordings,1)
+        self.synthetic_button = QPushButton('Synthetic review')
+        self.synthetic_button.clicked.connect(self.load_synthetic_review)
+        browser.addWidget(self.synthetic_button)
         self.load_button = QPushButton('Load recording')
         self.models_button = QPushButton('SMPL-X model folder…')
         self.diagnostics_button = QPushButton('Diagnostics…')
@@ -49,7 +53,7 @@ class MainWindow(QMainWindow):
                                valid=np.zeros((2,1),dtype=bool)) if dataset else synthetic_recording())
         self.viewport = Viewport(root,recording)
         self.viewport.optical_settings = self.panel_settings.values
-        self.viewport.set_frame(0,.35)
+        self.viewport.set_frame(0,.10)
         layout.addWidget(self.viewport.interactor,1)
         self.controller = Controller(recording,self.viewport,output_root,self)
         self.controls = QWidget()
@@ -66,6 +70,9 @@ class MainWindow(QMainWindow):
             return widget
         button('Reset camera',self.viewport.reset_view,camera)
         button('Fit participants',self.viewport.fit_participants,camera)
+        button('Fit optics',lambda:self.viewport.fit_optics(),camera)
+        button('Inspect A',lambda:self.inspect_participant(0),camera)
+        button('Inspect B',lambda:self.inspect_participant(1),camera)
         self.orbit = QCheckBox('Orbit')
         self.orbit.setToolTip('Automatically orbit around world Z, including while playback is paused.')
         self.orbit.toggled.connect(self.controller.set_orbit_enabled)
@@ -83,13 +90,38 @@ class MainWindow(QMainWindow):
         self.viewport.interactor.setToolTip(
             'Orbit (upright): drag · Pan: Shift + drag · Zoom: scroll')
         camera.addStretch()
-        camera.addWidget(QLabel('Placeholder spread (m)'))
-        self.spread = QDoubleSpinBox()
-        self.spread.setRange(.05,.8)
-        self.spread.setSingleStep(.05)
-        self.spread.setValue(.35)
-        self.spread.valueChanged.connect(self.controller.set_spread)
-        camera.addWidget(self.spread)
+        button('Waveguide settings…',self.show_settings,camera)
+        optical = QHBoxLayout()
+        controls_layout.addLayout(optical)
+        for title, attribute, checked in (('Frustums','show_frustums',True),
+                                         ('UI lines','show_ui_lines',True),
+                                         ('Local axes','show_axes',False),
+                                         ('Eye tests','show_eye_tests',True)):
+            checkbox = QCheckBox(title)
+            checkbox.setChecked(checked)
+            checkbox.toggled.connect(lambda value, key=attribute: self.set_optical_visibility(key,value))
+            setattr(self, attribute, checkbox)
+            optical.addWidget(checkbox)
+        optical.addWidget(QLabel('Frustum opacity'))
+        self.frustum_opacity = QDoubleSpinBox()
+        self.frustum_opacity.setRange(0,1)
+        self.frustum_opacity.setSingleStep(.05)
+        self.frustum_opacity.setValue(.10)
+        self.frustum_opacity.valueChanged.connect(self.controller.set_frustum_opacity)
+        optical.addWidget(self.frustum_opacity)
+        optical.addStretch()
+        self.visibility_dock = QDockWidget('Current-frame eye tests',self)
+        self.visibility_dock.setObjectName('visibility_diagnostics')
+        self.visibility_text = QTextEdit()
+        self.visibility_text.setReadOnly(True)
+        self.visibility_text.setMinimumWidth(320)
+        self.visibility_dock.setWidget(self.visibility_text)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.visibility_dock)
+        self.visibility_dock.hide()
+        button('Eye-test details',lambda:self.visibility_dock.setVisible(not self.visibility_dock.isVisible()),optical)
+        self.visibility_label = QLabel()
+        self.visibility_label.setWordWrap(True)
+        controls_layout.addWidget(self.visibility_label)
         row = QHBoxLayout()
         controls_layout.addLayout(row)
         self.jump_start = button('',lambda:self.controller.seek(0),row,'Jump to Start')
@@ -154,9 +186,25 @@ class MainWindow(QMainWindow):
         self.controller.status.connect(self.statusBar().showMessage)
         self.controller.export_failed.connect(lambda message: QMessageBox.warning(self, 'Export failed', message))
         self.statusBar().showMessage('Choose where to save each screenshot or video.')
-        self.sync()
+        self.controller.refresh()
         if dataset:
             self.controller.discover_recordings(dataset)
+
+    def inspect_participant(self, participant):
+        self.orbit.setChecked(False)
+        self.viewport.inspect_participant(participant,self.controller.state.frame)
+
+    def load_synthetic_review(self):
+        if self.controller.job or self.controller.loading:
+            return
+        self.controller.set_recording(synthetic_recording())
+        self.metadata_label.setText('Synthetic review · invented paired motion · settings apply to both participants')
+        self.orbit.setChecked(False)
+        self.visibility_dock.show()
+
+    def set_optical_visibility(self, key, visible):
+        setattr(self.viewport,key,visible)
+        self.controller.refresh()
 
     def show_settings(self):
         try:
@@ -249,6 +297,13 @@ class MainWindow(QMainWindow):
                 controller.save_screenshot(destination, overwrite=True)
 
     def sync(self):
+        result = self.controller.current_visibility
+        self.visibility_label.setText(visibility_summary(result))
+        details = visibility_details(result,self.controller.optical_parameters)
+        if details != self.visibility_text.toPlainText():
+            scroll = self.visibility_text.verticalScrollBar().value()
+            self.visibility_text.setPlainText(details)
+            self.visibility_text.verticalScrollBar().setValue(scroll)
         state = self.controller.state
         with QSignalBlocker(self.slider):
             self.slider.setRange(0,state.frame_count-1)
@@ -274,6 +329,7 @@ class MainWindow(QMainWindow):
             self._export_size_limits = None
         loading = self.controller.loading is not None
         usable = bool(recording.valid.any())
+        self.synthetic_button.setEnabled(not busy and not loading)
         self.load_button.setEnabled(not busy and not loading and bool(self.infos))
         self.recordings.setEnabled(not busy and not loading)
         self.models_button.setEnabled(not busy and not loading)

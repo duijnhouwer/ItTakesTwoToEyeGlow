@@ -3,7 +3,9 @@
 The desktop now discovers paired EgoBody SMPL-X recordings and loads them in a
 background worker for synchronized skeleton playback. Licensed SMPL-X model NPZ files are loaded by default from
 `../assets/models_smplx_v1_1/models/smplx`. The dataset contains fitted motion
-parameters; the separate model assets reconstruct the skeleton. Visibility analysis is a later phase.
+parameters; the separate model assets reconstruct the skeleton. Shared waveguide
+geometry and current-frame potential-visibility diagnostics are available for
+Phase 3 visual review. Whole-recording scores remain a later phase.
 
 See [Phase 2 data inspection and validation](docs/PHASE2_DATA_INSPECTION.md).
 
@@ -39,7 +41,21 @@ Use `--synthetic` to run the deterministic demo without data or models. Windows 
   reverse direction. Automatic orbit pauses during save dialogs and exports.
 - Play/Pause, Step, Start, and the slider control the same frame state.
 - Try 0.25×, 0.5×, 1×, and 2× playback; Loop controls the end-of-sequence behavior.
-- Change **Placeholder spread** to update both head-locked volumes immediately.
+- **Waveguide settings…** (also File → Settings) edits both participants' shared
+  expander windows, lens offsets, diagonal FOV and H/V ratio, UI-line angles,
+  display mode, and maximum distance. Save updates the current scene immediately.
+- **Frustums**, **UI lines**, **Local axes**, and **Eye tests** toggle inspection
+  layers. **Frustum opacity** changes only presentation. Axes use red/right,
+  green/forward, blue/up. There is no placeholder spread control anymore.
+- **Inspect A/B** stops camera orbit and frames that person's glasses closely.
+  **Fit optics** frames the full active volumes; **Fit participants** returns to
+  a view of the people.
+- Receiving-eye rings use green/pass, red/fail, gray/invalid. **Eye-test details**
+  opens the current-frame explanation: which emitting window contains which
+  receiving eye, per-pair distance, head-facing angle, and data validity.
+  The summary's left/right eye names always refer to the receiving participant.
+- **Synthetic review** switches to deterministic paired motion, pauses orbit,
+  and opens the eye-test panel. Use Load recording to return to real motion.
 - **File → Export screenshot ...** opens a PNG-only save dialog, defaulting on Linux to
   `~/Pictures/<recording-name>.png`. It captures only the scene at the current
   viewport pixel size; there are no screenshot settings.
@@ -95,7 +111,10 @@ source changes, especially changes to the settings format: the source app and
 packaged app read the same `config/settings_panel.json`. Validate the rebuilt
 executable with the packaged smoke command above before handing off a change.
 
-The smoke test drives the actual event loop, exercises playback speeds, scrubbing,
+The smoke test first checks loading fit arrays with both legacy and current NumPy
+pickle module names, using the bundled NumPy when run from the packaged executable.
+Users do not need to install Python or NumPy separately.
+It then drives the actual event loop, exercises playback speeds, scrubbing,
 camera changes, live geometry, actor reuse, native-size screenshot, FHD/4K captures, and a 60-frame FHD MP4 export at 24 fps, then
 exits with a machine-readable report. It is not a substitute for hands-on review.
 Distribute the entire `dist/EyeGlowEgoBody/` directory, not just the executable.

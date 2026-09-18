@@ -1,0 +1,42 @@
+"""Plain-text current-frame explanations derived exclusively from engine results."""
+from .visibility import VisibilityState
+
+
+def visibility_summary(result):
+    if result is None:
+        return 'Current frame: INVALID — eye-center data unavailable'
+    return '    '.join(f'{receiver} sees {emitter}: {VisibilityState(int(result.states[i,0])).name}'
+                       for i,(receiver,emitter) in enumerate((('A','B'),('B','A'))))
+
+
+def visibility_details(result, parameters):
+    if result is None:
+        return 'INVALID: explicit eye-center data is required.'
+    lines = ['Potential visibility at eye centers; this is not measured gaze.',
+             'Green eye rings = pass; red = fail; gray = invalid.',
+             'Axes: red = right, green = forward, blue = up.',
+             'Containment and radial distance must pass for the SAME active window.', '']
+    for index,(receiver,emitter) in enumerate((('A','B'),('B','A'))):
+        d = result.diagnostics[index]
+        lines.append(f'{receiver} sees {emitter}: {VisibilityState(int(result.states[index,0])).name}')
+        if not d.valid[0]:
+            lines.extend(['  INVALID: one or both participant frames / poses / eyes are unusable.', ''])
+            continue
+        lines.append(f'  Head facing: {"PASS" if d.facing_pass[0] else "FAIL"} '
+                     f'({d.facing_angle_deg[0]:.3f} deg; limit {parameters.head_facing_threshold_deg:g} deg)')
+        for eye in range(2):
+            lines.append(f'  Receiver {"LR"[eye]} eye: {"PASS" if d.visible_eyes[0,eye] else "FAIL"}')
+            for window in range(2):
+                if not d.active_waveguides[window]:
+                    lines.append(f'    Emitter {"LR"[window]} window: inactive')
+                    continue
+                contained, distance = d.contained[0,window,eye], d.distance_pass[0,window,eye]
+                margin = d.plane_distances_m[0,window,eye].max()*1000
+                lines.append(f'    Emitter {"LR"[window]}: containment {"PASS" if contained else "FAIL"} '
+                             f'(max plane distance {margin:+.3f} mm); '
+                             f'distance {"PASS" if distance else "FAIL"} '
+                             f'({d.distances_m[0,window,eye]:.3f} / {parameters.maximum_distance_m:g} m)')
+        lines.append('')
+    h,v = parameters.fov_degrees
+    lines.append(f'Derived FOV: H {h:.3f} deg, V {v:.3f} deg. Boundary points are included.')
+    return '\n'.join(lines)

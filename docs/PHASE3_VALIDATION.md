@@ -29,10 +29,10 @@ Earlier flat settings documents remain readable and receive model defaults for
 unspecified new values. The committed settings file exposes all new controls.
 
 `PanelSettings.optical_parameters` produces the immutable shared model, also
-held by the controller. The Phase 3 controls persist parameters; final rendered
-frustums consume this geometry in Phase 4, and whole-recording UI scores are
-Phase 5. Existing placeholder rendering remains labeled as such. The graphical
-waveguide editor is explicitly recorded in Phase 10.
+held by the controller. The Phase 3 controls persist parameters and now immediately update rendered
+windows, frustums, and UI lines. Current-frame receiving-eye diagnostics use the
+same parameter instance and engine output. Whole-recording UI scores remain
+Phase 5; the graphical waveguide editor remains Phase 10.
 
 ## Geometry conventions to review
 
@@ -175,3 +175,46 @@ and a 60-frame FHD MP4 export all passed. Report:
 `.runtime/phase3-build.log`. No settings values were changed by this correction.
 README now explicitly requires rebuilding and testing the packaged executable
 when source/settings-format changes are delivered.
+
+## Visual validation implementation (authorized scope move)
+
+The plan-only change is commit `fbe9a12`. Phase 3 now includes visual review:
+
+- Persistent left/right window, frustum, and UI-line actors per person use
+  `build_frustum` and `waveguide_centers` directly. No placeholder geometry remains.
+- The controller evaluates one frame through `analyze_visibility`, shares the
+  same immutable parameter instance with the renderer, and exposes that result
+  in the caption, eye-test panel, and colored receiver-eye rings.
+- Green means pass, red means fail, gray means invalid. Eye labels identify the
+  receiving participant and anatomical left/right eye. Per-window containment
+  and distance tests, facing angle/threshold, and validity are inspectable.
+- File → Settings / Waveguide settings immediately updates current-frame optics
+  after Save. Display mode activates the matching emitting windows only.
+- Frustums, UI lines, local axes, and eye tests have visibility toggles. Frustum
+  opacity replaces placeholder spread. Presentation controls never affect scores.
+- Inspect A/B gives a close view and stops orbit. Fit optics frames active volumes.
+  Synthetic review opens the deterministic fixture and diagnostic panel; real
+  loaded recordings support the same inspection controls.
+
+Developer checks: 155 tests pass (including the pre-existing NumPy compatibility
+addition), with checks for exact rendered/numeric corner agreement, per-eye
+activation, offsets, actor reuse, invalid-frame hiding, diagnostic colors/text,
+and presentation independence. Native smoke checks additionally mutate optical
+parameters and all three display modes on live actors, then restore user values.
+No settings file is altered by these smoke checks. Screenshot evidence and smoke
+reports are written under `.runtime/phase3-visual-source/` and
+`.runtime/phase3-visual-package/`, including `optics-inspection.png`.
+
+Joint visual sign-off remains pending. Phase 4 retains final glasses styling and
+unscored camera containment; whole-recording analysis, percentages, and timeline
+remain Phase 5 and later.
+
+Both native source and rebuilt-package visual smoke tests passed on Linux with
+40 persistent actors, FHD/4K screenshots, and a 60-frame MP4 export. The packaged
+playback heartbeat p95 was 0.062 seconds. Real-recording review also loaded
+`recording_20210907_S02_S01_01` (1,290 frames) and rendered four active frustums.
+At frame 1, both directions correctly reported NONE: facing and distance passed,
+but all receiver-eye/window containment tests failed. The visible red eye rings
+and numeric panel agreed. Real-data screenshots and the diagnostic report are
+in `.runtime/phase3-visual-real/`. Source and packaged inspection screenshots
+were visually inspected. Owner review remains outstanding.

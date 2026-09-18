@@ -8,6 +8,7 @@ import logging
 from PySide6.QtCore import QObject, QTimer, Signal
 from eyeglow_egobody.model.state import PlaybackState
 from eyeglow_egobody.model.parameters import OpticalParameters
+from eyeglow_egobody.analysis.visibility import analyze_visibility
 from eyeglow_egobody.model.export_settings import VideoSettings
 from eyeglow_egobody.export.animation import ImageWriter, VideoStream
 from eyeglow_egobody.export.paths import safe_destination
@@ -29,7 +30,8 @@ class Controller(QObject):
         self.state = PlaybackState(recording.frame_count, recording.fps)
         self.export_start, self.export_end = 0, recording.frame_count-1
         self.optical_parameters = OpticalParameters.from_settings(getattr(viewport, "optical_settings", {}))
-        self.spread = .35
+        self.frustum_opacity = .10
+        self.current_visibility = None
         self.orbit_enabled = False
         self.orbit_speed = 5.0
         self.orbit_suspended = False
@@ -103,7 +105,14 @@ class Controller(QObject):
         self.refresh()
 
     def refresh(self):
-        self.viewport.set_frame(self.state.frame, self.spread)
+        frame = self.state.frame
+        recording = self.recording
+        self.current_visibility = (None if recording.eyes is None else analyze_visibility(
+            recording.heads[:,frame:frame+1], recording.eyes[:,frame:frame+1],
+            recording.valid[:,frame:frame+1], self.optical_parameters))
+        self.viewport.optical_parameters = self.optical_parameters
+        self.viewport.current_visibility = self.current_visibility
+        self.viewport.set_frame(frame, self.frustum_opacity)
         self.changed.emit()
 
     def seek(self, frame):
@@ -119,9 +128,9 @@ class Controller(QObject):
             self.last = monotonic()
             self.changed.emit()
 
-    def set_spread(self, value):
+    def set_frustum_opacity(self, value):
         if not self.job:
-            self.spread = value
+            self.frustum_opacity = max(0., min(1., float(value)))
             self.refresh()
 
     def set_orbit_enabled(self, enabled):

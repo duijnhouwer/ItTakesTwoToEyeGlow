@@ -4,6 +4,10 @@ import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 hidden = collect_submodules('pyvista') + collect_submodules('vtkmodules')
+# Fit pickles import these modules dynamically through ArrayUnpickler. Include
+# both NumPy namespace generations so the build can read older dataset files.
+hidden += ['numpy.core.multiarray', 'numpy.core.numeric',
+           'numpy._core.multiarray', 'numpy._core.numeric']
 data = collect_data_files('pyvista') + copy_metadata('pyvista') + collect_data_files('imageio_ffmpeg')
 binaries = []
 if sys.platform.startswith('linux'):

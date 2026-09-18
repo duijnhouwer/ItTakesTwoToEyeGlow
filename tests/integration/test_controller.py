@@ -8,7 +8,7 @@ from eyeglow_egobody.model.recording import synthetic_recording
 
 class FakeViewport:
     def set_frame(self, frame, spread):
-        self.frame, self.spread = frame, spread
+        self.frame, self.frustum_opacity = frame, spread
 
     def capture_size(self):
         return (16,16)
@@ -59,10 +59,10 @@ def test_export_locks_frame_and_parameter_mutation(controller):
     controller.seek(10)
     controller.export_video(controller.output_root/'video.mp4')
     controller.seek(50)
-    controller.set_spread(.8)
+    controller.set_frustum_opacity(.8)
     controller.toggle()
     assert controller.state.frame == 10
-    assert controller.spread == .35
+    assert controller.frustum_opacity == .10
     assert not controller.state.playing
     controller.cancel_export()
     controller._export_tick()

@@ -694,7 +694,7 @@ implementation stopped; approval follows the corresponding joint test phase.
 |---|---|---|---|---|
 | 1 — Technical spike | Passed on Linux | Complete | Yes | Completed 2026-09-18; see Phase 1 completion note and [validation record](docs/PHASE1_VALIDATION.md). |
 | 2 — EgoBody inspection and playback | 87 tests and real-playback/package checks passed | Accepted by owner | Yes | Completed 2026-09-18 with explicit owner sign-off; documented floor limitation carried forward. See [inspection and validation](docs/PHASE2_DATA_INSPECTION.md). |
-| 3 — Analysis engine | 148 tests passed on Linux | Pending | No | Numeric engine and grouped settings implemented; see [conventions and synthetic review](docs/PHASE3_VALIDATION.md). |
+| 3 — Analysis engine and visual validation | 155 tests passed on Linux | Pending | No | Shared geometry rendering, eye diagnostics, and grouped settings implemented; see [conventions and synthetic review](docs/PHASE3_VALIDATION.md). |
 | 4 — Optical rendering | Not run | Not run | No | |
 | 5 — Integrated visibility | Not run | Not run | No | |
 | 6 — Timeline and UX | Not run | Not run | No | |

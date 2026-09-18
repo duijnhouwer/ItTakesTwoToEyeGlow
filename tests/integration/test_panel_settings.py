@@ -108,14 +108,18 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
     recording = synthetic_recording()
     from eyeglow_egobody.rendering.materials import eye_sphere_source
     viewport = SimpleNamespace(recording=recording, optical_settings=dict(eyeball_radius_mm=12, eye_relief_mm=13),
-                               parts=[], eye_parts=[], stable_actors=[], eye_sphere=eye_sphere_source(.012), update=lambda: None,
+                               parts=[], eye_parts=[], stable_actors=[], participant_actors=[],
+                               optics=SimpleNamespace(update=lambda *args: None), current_visibility=None,
+                               show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
+                               eye_sphere=eye_sphere_source(.012), update=lambda: None,
                                caption=SimpleNamespace(SetText=lambda *args: None))
     for p in range(2):
-        actors = [vtkActor() for _ in range(5)]
+        actors = [vtkActor() for _ in range(4)]
+        viewport.participant_actors.append(actors)
         viewport.stable_actors.extend(actors)
         viewport.parts.append((pv.PolyData(np.zeros((16,3))),pv.PolyData(np.zeros((GLASSES_POINT_COUNT,3))),
-                               pv.PolyData(np.zeros((8,3))),actors[3]))
-        viewport.eye_parts.append((pv.PolyData(np.zeros((2,3))),actors[4]))
+                               actors[2]))
+        viewport.eye_parts.append((pv.PolyData(np.zeros((2,3))),actors[3]))
     actors = tuple(viewport.stable_actors)
     Viewport.set_frame(viewport, 120, .35)
     for p in range(2):
@@ -123,8 +127,8 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
         assert viewport.eye_parts[p][1].GetVisibility()
     recording.valid[0,120] = False
     Viewport.set_frame(viewport, 120, .35)
-    assert all(not a.GetVisibility() for a in actors[:5])
-    assert all(a.GetVisibility() for a in actors[5:])
+    assert all(not a.GetVisibility() for a in actors[:4])
+    assert all(a.GetVisibility() for a in actors[4:])
     recording.valid[0,120] = True
     Viewport.set_frame(viewport, 120, .35)
     assert all(a.GetVisibility() for a in actors)
