@@ -52,7 +52,7 @@ Use `--synthetic` to run the deterministic demo without data or models. Windows 
   a view of the people.
 - Receiving-eye rings use green/pass, red/fail, gray/invalid. **Eye-test details**
   opens the current-frame explanation: which emitting window contains which
-  receiving eye, per-pair distance, head-facing angle, and data validity.
+  receiving eye, per-pair distance, receiver FOV, and data validity.
   The summary's left/right eye names always refer to the receiving participant.
 - **Synthetic review** switches to deterministic paired motion, pauses orbit,
   and opens the eye-test panel. Use Load recording to return to real motion.

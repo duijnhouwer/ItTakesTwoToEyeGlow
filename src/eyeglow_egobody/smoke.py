@@ -156,7 +156,7 @@ def start_smoke(app,window,output):
                 controller.seek(0)
                 window.frustum_opacity.setValue(.10)
                 window.show_axes.setChecked(True)
-                window.visibility_dock.show()
+                window.show_eye_test_details()
                 window.inspect_participant(0)
                 app.processEvents()
                 window.viewport.render()

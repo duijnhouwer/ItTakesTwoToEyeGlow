@@ -1,25 +1,16 @@
 {
   "schema_version": 1,
   "settings": {
-    "eyeball_radius_mm": {
-      "display_name": "Eyeball radius (mm)",
-      "value": 12.0,
-      "default": 12.0,
-      "min": 1.0,
-      "max": 30.0,
-      "precision": 1,
-      "factory_default": 12.0
-    },
-    "eye_relief_mm": {
-      "display_name": "Eye relief (mm)",
-      "value": 12.0,
-      "default": 13.0,
-      "min": 0.0,
-      "max": 100.0,
-      "precision": 1,
-      "factory_default": 13.0
-    },
     "smartglasses": {
+      "eye_relief_mm": {
+        "display_name": "Eye relief (mm)",
+        "value": 13.0,
+        "default": 13.0,
+        "min": 0.0,
+        "max": 100.0,
+        "precision": 1,
+        "factory_default": 13.0
+      },
       "expander_width_mm": {
         "display_name": "Eyebox expander width (mm)",
         "value": 20.0,
@@ -94,7 +85,7 @@
       },
       "maximum_distance_m": {
         "display_name": "Maximum analysis distance (m)",
-        "value": 6.0,
+        "value": 5.0,
         "default": 5,
         "min": 0.01,
         "max": 100,
@@ -115,7 +106,7 @@
       "eye_glow_color": {
         "display_name": "Eye glow color",
         "kind": "color",
-        "value": "#10f5ed",
+        "value": "#64f59b",
         "default": "#64f59b",
         "factory_default": "#64f59b"
       }
@@ -124,14 +115,14 @@
       "subject_a_color": {
         "display_name": "Subject A color",
         "kind": "color",
-        "value": "#0000ff",
+        "value": "#64f59b",
         "default": "#59c9f1",
         "factory_default": "#59c9f1"
       },
       "subject_b_color": {
         "display_name": "Subject B color",
         "kind": "color",
-        "value": "#aa0000",
+        "value": "#ffb56b",
         "default": "#ffb56b",
         "factory_default": "#ffb56b"
       },
@@ -164,14 +155,53 @@
         "factory_default": true
       }
     },
-    "head_facing_threshold_deg": {
-      "display_name": "Receiver head-facing threshold (deg)",
-      "value": 90.0,
-      "default": 90,
-      "min": 0,
-      "max": 180,
-      "precision": 2,
-      "factory_default": 90
+    "receiver_fov": {
+      "receiver_fov_left_deg": {
+        "display_name": "Left (deg)",
+        "value": 60.0,
+        "default": 60,
+        "min": 0.01,
+        "max": 179,
+        "precision": 2,
+        "factory_default": 60
+      },
+      "receiver_fov_right_deg": {
+        "display_name": "Right (deg)",
+        "value": 60.0,
+        "default": 60,
+        "min": 0.01,
+        "max": 179,
+        "precision": 2,
+        "factory_default": 60
+      },
+      "receiver_fov_top_deg": {
+        "display_name": "Top (deg)",
+        "value": 45.0,
+        "default": 45,
+        "min": 0.01,
+        "max": 90,
+        "precision": 2,
+        "factory_default": 45
+      },
+      "receiver_fov_bottom_deg": {
+        "display_name": "Bottom (deg)",
+        "value": 70.0,
+        "default": 70,
+        "min": 0.01,
+        "max": 90,
+        "precision": 2,
+        "factory_default": 70
+      },
+      "receiver_fov_shape": {
+        "display_name": "Shape",
+        "value": "elliptical",
+        "default": "elliptical",
+        "factory_default": "elliptical",
+        "choices": [
+          "elliptical",
+          "rectangular"
+        ]
+      }
     }
   }
 }

@@ -1,5 +1,6 @@
 """White Wayfarer-style frame geometry anchored to fitted eye centers (meters)."""
 import numpy as np
+from eyeglow_egobody.model.parameters import EYEBALL_RADIUS_MM
 
 
 def _curve(anchors, steps=8, closed=False):
@@ -86,13 +87,13 @@ _TEMPLATE, GLASSES_FACES = _geometry(np.array([[-.032,0,0],[.032,0,0]]))
 GLASSES_POINT_COUNT = len(_TEMPLATE)
 
 
-def glasses_points(eyes, rotation, eyeball_radius_mm, eye_relief_mm):
-    """Rear lens planes remain radius + relief ahead of each eye along head-forward.
+def glasses_points(eyes, rotation, eye_relief_mm):
+    """Rear lens planes remain 12 mm + relief ahead of each eye along head-forward.
 
     Styling is illustrative; there is no lens surface, refraction, or gaze rotation.
     """
     origin = np.asarray(eyes).mean(axis=0)
     local_eyes = (np.asarray(eyes)-origin) @ rotation
-    local_eyes[:,1] += (eyeball_radius_mm+eye_relief_mm)/1000.
+    local_eyes[:,1] += (EYEBALL_RADIUS_MM + eye_relief_mm) / 1000.
     points, _ = _geometry(local_eyes)
     return points @ rotation.T + origin

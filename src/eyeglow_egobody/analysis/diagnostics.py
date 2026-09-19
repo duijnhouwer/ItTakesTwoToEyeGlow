@@ -22,8 +22,6 @@ def visibility_details(result, parameters):
         if not d.valid[0]:
             lines.extend(['  INVALID: one or both participant frames / poses / eyes are unusable.', ''])
             continue
-        lines.append(f'  Head facing: {"PASS" if d.facing_pass[0] else "FAIL"} '
-                     f'({d.facing_angle_deg[0]:.3f} deg; limit {parameters.head_facing_threshold_deg:g} deg)')
         for eye in range(2):
             lines.append(f'  Receiver {"LR"[eye]} eye: {"PASS" if d.visible_eyes[0,eye] else "FAIL"}')
             for window in range(2):
@@ -31,11 +29,16 @@ def visibility_details(result, parameters):
                     lines.append(f'    Emitter {"LR"[window]} window: inactive')
                     continue
                 contained, distance = d.contained[0,window,eye], d.distance_pass[0,window,eye]
+                fov = d.receiver_fov_pass[0,window,eye]
                 margin = d.plane_distances_m[0,window,eye].max()*1000
                 lines.append(f'    Emitter {"LR"[window]}: containment {"PASS" if contained else "FAIL"} '
                              f'(max plane distance {margin:+.3f} mm); '
                              f'distance {"PASS" if distance else "FAIL"} '
-                             f'({d.distances_m[0,window,eye]:.3f} / {parameters.maximum_distance_m:g} m)')
+                             f'({d.distances_m[0,window,eye]:.3f} / {parameters.maximum_distance_m:g} m); '
+                             f'receiver FOV {"PASS" if fov else "FAIL"} '
+                             f'(az {d.receiver_azimuth_deg[0,window,eye]:+.3f} deg, '
+                             f'el {d.receiver_elevation_deg[0,window,eye]:+.3f} deg; '
+                             f'{parameters.receiver_fov_shape.value})')
         lines.append('')
     h,v = parameters.fov_degrees
     lines.append(f'Derived FOV: H {h:.3f} deg, V {v:.3f} deg. Boundary points are included.')

@@ -6,7 +6,7 @@ from pyvistaqt import QtInteractor
 from .materials import eye_sphere_source, eye_spheres
 from vtkmodules.vtkRenderingCore import vtkBillboardTextActor3D
 
-from eyeglow_egobody.model.parameters import OpticalParameters
+from eyeglow_egobody.model.parameters import EYEBALL_RADIUS_MM, OpticalParameters
 from eyeglow_egobody.analysis.geometry import valid_transform
 from eyeglow_egobody.analysis.diagnostics import visibility_summary
 from .optics import OpticalScene, update_points
@@ -32,15 +32,15 @@ class Viewport(QtInteractor):
     def __init__(self, parent, recording):
         super().__init__(parent, auto_update=False, multi_samples=0)
         self.recording = recording
-        self.optical_settings = dict(eyeball_radius_mm=12., eye_relief_mm=13.)
+        self.optical_settings = dict(eye_relief_mm=13.)
         self.current_visibility = None
         self.show_frustums = True
-        self.show_ui_lines = True
+        self.show_ui_lines = False
         self.show_axes = False
         self.show_eye_tests = True
         self.participant_actors = []
         self.eye_parts = []
-        self.eye_sphere = eye_sphere_source(self.optical_settings['eyeball_radius_mm']/1000.)
+        self.eye_sphere = eye_sphere_source(EYEBALL_RADIUS_MM / 1000)
         self.set_background('#172330')
         # Azimuth/elevation orbit keeps world Z upright and does not roll.
         self.enable_terrain_style(mouse_wheel_zooms=True, shift_pans=True)
@@ -108,7 +108,7 @@ class Viewport(QtInteractor):
         label_visible = (self.optical_settings.get('subject_a_label_visible', True),
                          self.optical_settings.get('subject_b_label_visible', True))
         glow_color = self.optical_settings.get('eye_glow_color', '#64f59b')
-        self.eye_sphere.SetRadius(parameters.eyeball_radius_mm/1000.)
+        self.eye_sphere.SetRadius(EYEBALL_RADIUS_MM / 1000)
         for p,(skeleton,glasses,label) in enumerate(self.parts):
             transform = self.recording.heads[p,frame]
             valid = bool(self.recording.valid[p,frame] and valid_transform(transform))
@@ -138,7 +138,7 @@ class Viewport(QtInteractor):
                 for eye, (eye_mesh, eye_actor) in enumerate(eye_parts):
                     update_points(eye_mesh, eye_centers[eye:eye + 1])
                     eye_actor.GetProperty().SetColor(colors[eye] / 255)
-                update_points(glasses,glasses_points(eye_centers,rot,parameters.eyeball_radius_mm,parameters.eye_relief_mm))
+                update_points(glasses,glasses_points(eye_centers,rot,parameters.eye_relief_mm))
             label.SetPosition(*(origin + [0,0,.25]))
         self.optics.update(self.recording,frame,parameters,self.current_visibility,opacity,
                            self.show_frustums,self.show_ui_lines,self.show_axes,self.show_eye_tests,

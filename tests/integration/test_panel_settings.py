@@ -1,10 +1,10 @@
 import json
 import numpy as np
 import pytest
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog, QGroupBox
 from eyeglow_egobody.model.panel_settings import PanelSettings, settings_path
 from eyeglow_egobody.model.glasses import glasses_points, GLASSES_POINT_COUNT, REAR_RIM_INDICES
-from eyeglow_egobody.ui.settings_dialog import SettingsDialog
+from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
 
 
 @pytest.fixture
@@ -23,9 +23,39 @@ def test_settings_dialog_persists_values_and_preserves_metadata(qt_app, store):
     dialog.accept()
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert PanelSettings(store.path).values['eye_relief_mm'] == 17.5
-    assert store.document['settings']['eye_relief_mm']['default'] == 13
-    original['settings']['eye_relief_mm']['value'] = 17.5
+    assert store.document['settings']['smartglasses']['eye_relief_mm']['default'] == 13
+    original['settings']['smartglasses']['eye_relief_mm']['value'] = 17.5
     assert json.loads(store.path.read_text()) == original
+
+
+def test_receiver_fov_group_has_paired_angle_rows_and_shape_choice(qt_app, store):
+    dialog = SettingsDialog(store)
+    group = dialog.findChild(QGroupBox, 'receiver_fov')
+    assert group.title() == 'Receiver FOV'
+    assert group.layout().rowCount() == 3
+    assert dialog.fields['receiver_fov_left_deg'].text() == '60.00'
+    assert dialog.fields['receiver_fov_right_deg'].text() == '60.00'
+    assert dialog.fields['receiver_fov_top_deg'].text() == '45.00'
+    assert dialog.fields['receiver_fov_bottom_deg'].text() == '70.00'
+    assert dialog.fields['receiver_fov_shape'].currentText() == 'Elliptical'
+    assert [dialog.fields['receiver_fov_shape'].itemText(i) for i in range(2)] == [
+        'Elliptical', 'Rectangular']
+
+
+def test_embedded_group_buttons_save_and_reset_only_their_group(qt_app, store):
+    editor = SettingsEditor(store, ('smartglasses', 'receiver_fov'))
+    assert not hasattr(editor, 'buttons')
+    assert set(editor.group_factory_reset) == {'smartglasses', 'receiver_fov'}
+    assert set(editor.group_save) == {'smartglasses', 'receiver_fov'}
+    editor.fields['eye_relief_mm'].setText('19')
+    editor.fields['receiver_fov_left_deg'].setText('80')
+    editor.group_save['smartglasses'].click()
+    assert store.values['eye_relief_mm'] == 19
+    assert store.values['receiver_fov_left_deg'] == 60
+    assert editor.fields['receiver_fov_left_deg'].text() == '80'
+    editor.group_factory_reset['receiver_fov'].click()
+    assert editor.fields['receiver_fov_left_deg'].text() == '60.00'
+    assert editor.fields['eye_relief_mm'].text() == '19'
 
 
 @pytest.mark.parametrize('text', ['nan', 'inf', 'abc', '', '-1', '101', '13.123'])
@@ -59,14 +89,14 @@ def test_rear_lens_vertex_clearance_in_rotated_world_coordinates():
     from eyeglow_egobody.egobody.skeleton import rotations
     rotation = rotations(np.array([.4, -.7, 1.2]))
     eyes = np.array([[-.03,.08,.02],[.03,.08,.02]]) @ rotation.T + [1,2,3]
-    points = glasses_points(eyes, rotation, 12, 13)
+    points = glasses_points(eyes, rotation, 13)
     for eye, rim in zip(eyes, (points[REAR_RIM_INDICES[0]],points[REAR_RIM_INDICES[1]])):
         np.testing.assert_allclose((rim-eye) @ rotation[:,1], .025, atol=1e-12)
-    updated = glasses_points(eyes, rotation, 14, 18)
-    np.testing.assert_allclose(updated-points, np.tile(rotation[:,1]*.007,(GLASSES_POINT_COUNT,1)), atol=1e-12)
+    updated = glasses_points(eyes, rotation, 18)
+    np.testing.assert_allclose(updated-points, np.tile(rotation[:,1]*.005,(GLASSES_POINT_COUNT,1)), atol=1e-12)
 
 
-def test_file_settings_updates_current_view(qt_app, store, monkeypatch, tmp_path):
+def test_smartglasses_panel_updates_current_view(qt_app, store, monkeypatch, tmp_path):
     from PySide6.QtWidgets import QWidget
     from eyeglow_egobody.ui import main_window
     class Viewport(QWidget):
@@ -79,17 +109,13 @@ def test_file_settings_updates_current_view(qt_app, store, monkeypatch, tmp_path
         def set_frame(self, *args): self.refreshes += 1
     monkeypatch.setattr(main_window, 'Viewport', Viewport)
     monkeypatch.setattr(main_window, 'PanelSettings', lambda *args: store)
-    def save(dialog):
-        dialog.fields['eye_relief_mm'].setText('19')
-        dialog.fields['expander_width_mm'].setText('28')
-        dialog.accept()
-        return dialog.result()
-    monkeypatch.setattr(SettingsDialog, 'exec', save)
     window = main_window.MainWindow(tmp_path)
     window.controller.timer.stop()
     try:
         before = window.viewport.refreshes
-        window.settings_action.trigger()
+        window.smartglasses_panel.fields['eye_relief_mm'].setText('19')
+        window.smartglasses_panel.fields['expander_width_mm'].setText('28')
+        assert window.smartglasses_panel.save_group('smartglasses')
         assert window.viewport.optical_settings['eye_relief_mm'] == 19
         assert window.controller.optical_parameters.eye_relief_mm == 19
         assert window.controller.optical_parameters.expander_width_mm == 28
@@ -107,7 +133,7 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
     from eyeglow_egobody.model.recording import synthetic_recording
     recording = synthetic_recording()
     from eyeglow_egobody.rendering.materials import eye_sphere_source
-    viewport = SimpleNamespace(recording=recording, optical_settings=dict(eyeball_radius_mm=12, eye_relief_mm=13),
+    viewport = SimpleNamespace(recording=recording, optical_settings=dict(eye_relief_mm=13),
                                parts=[], eye_parts=[], stable_actors=[], participant_actors=[],
                                optics=SimpleNamespace(update=lambda *args, **kwargs: None), current_visibility=None,
                                show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
@@ -142,7 +168,7 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
 
 @pytest.mark.parametrize('save', [False, True])
 def test_factory_reset_is_staged_until_saved(qt_app, store, save):
-    store.save({**store.values, 'eyeball_radius_mm':30, 'eye_relief_mm':20})
+    store.save({**store.values, 'eye_relief_mm':20})
     before = store.path.read_bytes()
     dialog = SettingsDialog(store)
     dialog.fields['eye_relief_mm'].setText('invalid')
@@ -150,7 +176,6 @@ def test_factory_reset_is_staged_until_saved(qt_app, store, save):
     assert dialog.error.text()
     dialog.factory_reset.click()
     assert not dialog.error.text()
-    assert dialog.fields['eyeball_radius_mm'].text() == '12.0'
     assert dialog.fields['eye_relief_mm'].text() == '13.0'
     assert store.path.read_bytes() == before
     assert dialog.result() == QDialog.DialogCode.Rejected
@@ -158,7 +183,7 @@ def test_factory_reset_is_staged_until_saved(qt_app, store, save):
         dialog.accept()
         loaded = PanelSettings(store.path)
         assert loaded.values == {key: spec['factory_default'] for key, spec in loaded.specs.items()}
-        assert loaded.document['settings']['eyeball_radius_mm']['factory_default'] == 12
+        assert loaded.document['settings']['smartglasses']['eye_relief_mm']['factory_default'] == 13
     else:
         dialog.reject()
         assert store.path.read_bytes() == before
@@ -166,13 +191,13 @@ def test_factory_reset_is_staged_until_saved(qt_app, store, save):
 
 def test_factory_defaults_are_validated_and_distinct_from_default(qt_app, store):
     document = json.loads(store.path.read_text())
-    document['settings']['eye_relief_mm']['default'] = 16
-    document['settings']['eye_relief_mm']['factory_default'] = 14.5
+    document['settings']['smartglasses']['eye_relief_mm']['default'] = 16
+    document['settings']['smartglasses']['eye_relief_mm']['factory_default'] = 14.5
     store.path.write_text(json.dumps(document))
     dialog = SettingsDialog(PanelSettings(store.path))
     dialog.factory_reset.click()
     assert dialog.fields['eye_relief_mm'].text() == '14.5'
-    document['settings']['eye_relief_mm']['factory_default'] = 101
+    document['settings']['smartglasses']['eye_relief_mm']['factory_default'] = 101
     store.path.write_text(json.dumps(document))
     with pytest.raises(ValueError, match='between'):
         PanelSettings(store.path)
@@ -247,7 +272,7 @@ def test_smartglasses_and_visualization_controls_persist(qt_app, store):
     assert isinstance(dialog.fields['eye_glow_color'], QPushButton)
     assert isinstance(dialog.fields['subject_a_label_visible'], QCheckBox)
     mode.setCurrentIndex(mode.findData('binocular'))
-    dialog._set_color_button(dialog.fields['eye_glow_color'], '#123456')
+    dialog.editor._set_color_button(dialog.fields['eye_glow_color'], '#123456')
     dialog.fields['subject_a_label'].setText('Lead')
     dialog.fields['subject_a_label_visible'].setChecked(False)
     dialog.accept()

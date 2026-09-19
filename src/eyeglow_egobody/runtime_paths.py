@@ -10,6 +10,13 @@ def project_root():
     return Path(__file__).resolve().parents[2]
 
 
+def settings_resource_path(filename):
+    """Locate immutable packaged settings without treating the install as writable."""
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS) / 'config' / filename
+    return project_root() / 'config' / filename
+
+
 def assets_root():
     return project_root().parent / 'assets'
 

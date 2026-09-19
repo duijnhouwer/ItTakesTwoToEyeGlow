@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from enum import IntEnum
 import numpy as np
-from eyeglow_egobody.model.parameters import OpticalParameters
+from eyeglow_egobody.model.parameters import OpticalParameters, ReceiverFovShape
 from .geometry import build_frustum, waveguide_centers, BOUNDARY_TOLERANCE_M
 
 
@@ -21,8 +21,9 @@ class DirectionDiagnostics:
     contained: np.ndarray  # frames, emitting waveguide, receiving eye
     distances_m: np.ndarray
     distance_pass: np.ndarray
-    facing_angle_deg: np.ndarray  # frames
-    facing_pass: np.ndarray
+    receiver_azimuth_deg: np.ndarray  # frames, emitting waveguide, receiving eye
+    receiver_elevation_deg: np.ndarray
+    receiver_fov_pass: np.ndarray
     active_waveguides: np.ndarray  # left, right
     visible_eyes: np.ndarray  # frames, receiving eye
 
@@ -39,13 +40,38 @@ def reduce_state(visible_eyes, valid):
                     VisibilityState.INVALID).astype(np.int8)
 
 
+def receiver_fov_contains(local_vectors, parameters):
+    """Test patch-center bearings in receiver-local coordinates.
+
+    Local +X is right, +Y is face-forward, and +Z is up. Elliptical limits use
+    the configured horizontal and vertical extent for the bearing's quadrant.
+    """
+    vectors = np.asarray(local_vectors, dtype=float)
+    azimuth = np.degrees(np.arctan2(vectors[..., 0], vectors[..., 1]))
+    elevation = np.degrees(np.arctan2(vectors[..., 2],
+                                      np.hypot(vectors[..., 0], vectors[..., 1])))
+    horizontal_limit = np.where(azimuth < 0, parameters.receiver_fov_left_deg,
+                                parameters.receiver_fov_right_deg)
+    vertical_limit = np.where(elevation < 0, parameters.receiver_fov_bottom_deg,
+                              parameters.receiver_fov_top_deg)
+    if parameters.receiver_fov_shape == ReceiverFovShape.ELLIPTICAL:
+        inside = ((azimuth / horizontal_limit) ** 2
+                  + (elevation / vertical_limit) ** 2 <= 1 + 1e-12)
+    else:
+        inside = ((np.abs(azimuth) <= horizontal_limit + 1e-9)
+                  & (np.abs(elevation) <= vertical_limit + 1e-9))
+    inside &= np.linalg.norm(vectors, axis=-1) > BOUNDARY_TOLERANCE_M
+    return azimuth, elevation, inside
+
+
 def analyze_visibility(heads, eyes, valid=None, parameters=None):
     """heads (2,F,4,4), eye centers (2,F,2,3), valid (2,F).
 
     Reject nonfinite eyes and nonrigid head transforms even when marked valid.
     Maximum distance is Euclidean from each emitting window center to each
-    receiving eye (inclusive). Facing compares receiver head +Y to emitter lens
-    midpoint from receiver head origin. Coincident head/target has no direction.
+    receiving eye (inclusive). Receiver FOV tests each emitting patch center from
+    each receiving eye in receiver-head coordinates. Coincident eye/patch center
+    has no direction and fails the FOV test.
     """
     parameters = parameters or OpticalParameters()
     heads, eyes = np.asarray(heads, dtype=float), np.asarray(eyes, dtype=float)
@@ -66,9 +92,7 @@ def analyze_visibility(heads, eyes, valid=None, parameters=None):
     rigid = orthogonal & (np.abs(np.linalg.det(rotations)-1) <= 1e-5)
     rigid &= np.max(np.abs(safe_heads[...,3,:]-[0,0,0,1]),axis=-1) <= 1e-6
     pair_valid = (valid & finite & rigid).all(axis=0)
-    lens_offset = np.array([0, (parameters.eyeball_radius_mm+parameters.eye_relief_mm)/1000, 0])
     centers = waveguide_centers(safe_eyes, rotations, parameters)
-    lens_midpoints = safe_eyes.mean(axis=2) + np.einsum('pfij,j->pfi', rotations, lens_offset)
     template = build_frustum(np.zeros(3), np.eye(3), parameters)
     active = np.asarray(parameters.active_eyes)
     diagnostics, states = [], []
@@ -79,24 +103,23 @@ def analyze_visibility(heads, eyes, valid=None, parameters=None):
         contained = (planes <= BOUNDARY_TOLERANCE_M).all(axis=-1)
         distances = np.linalg.norm(delta, axis=-1)
         distance_pass = distances <= parameters.maximum_distance_m + BOUNDARY_TOLERANCE_M
-        toward = lens_midpoints[emitter] - safe_heads[receiver,:,:3,3]
-        length = np.linalg.norm(toward, axis=-1)
-        cosine = np.divide(np.sum(toward * rotations[receiver,:,:,1],axis=-1), length,
-                           out=np.zeros(count), where=length > 0)
-        angle = np.degrees(np.arccos(np.clip(cosine,-1,1)))
-        facing = (length > BOUNDARY_TOLERANCE_M) & (angle <= parameters.head_facing_threshold_deg + 1e-9)
-        visible = (contained & distance_pass & active[None,:,None]).any(axis=1)
-        visible &= (pair_valid & facing)[:,None]
+        toward = centers[emitter,:,:,None,:] - safe_eyes[receiver,:,None,:,:]
+        receiver_local = np.einsum('fwei,fij->fwej', toward, rotations[receiver])
+        azimuth, elevation, receiver_fov_pass = receiver_fov_contains(receiver_local, parameters)
+        pair_visible = contained & distance_pass & receiver_fov_pass & active[None,:,None]
+        visible = pair_visible.any(axis=1) & pair_valid[:,None]
         states.append(reduce_state(visible, pair_valid))
         # Invalid diagnostics are explicitly unavailable, never plausible replacement values.
         planes[~pair_valid] = np.nan
         distances[~pair_valid] = np.nan
-        angle[~pair_valid] = np.nan
+        azimuth[~pair_valid] = np.nan
+        elevation[~pair_valid] = np.nan
         contained &= pair_valid[:,None,None]
         distance_pass &= pair_valid[:,None,None]
-        facing &= pair_valid
+        receiver_fov_pass &= pair_valid[:,None,None]
         diagnostics.append(DirectionDiagnostics(pair_valid.copy(), planes, contained, distances,
-                                               distance_pass, angle, facing, active.copy(), visible))
+                                               distance_pass, azimuth, elevation, receiver_fov_pass,
+                                               active.copy(), visible))
     return VisibilityResult(np.asarray(states), tuple(diagnostics))
 
 

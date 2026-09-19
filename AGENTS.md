@@ -15,3 +15,7 @@
 - Do not create, modify, move, rename, or delete anything inside that directory.
 - Read and analyze files there only. Write derived artifacts, caches, logs, and generated outputs elsewhere, such as `/home/jacob/Documents/EyeGlowEgoBody/code-repo`.
 - If a requested operation appears to require changing the dataset, stop and ask the user before proceeding.
+
+## Backward compatibility
+
+- DO NOT ADD OR PRESERVE BACKWARD COMPATIBILITY UNLESS THE USER EXPLICITLY ASKS FOR IT.

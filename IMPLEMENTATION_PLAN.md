@@ -209,7 +209,7 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 - Rectangular waveguide near planes and rectangular frustum construction.
 - Stable point-in-frustum tests, including boundary behavior.
 - Monocular-left, monocular-right, and binocular activation.
-- Maximum-distance, valid-data, and receiver head-facing tests.
+- Maximum-distance, valid-data, and full-angle receiver-FOV tests.
 - Per-eye and bidirectional visibility-state reduction using the explicit states
   `INVALID`, `NONE`, `LEFT_EYE`, `RIGHT_EYE`, and `BOTH_EYES`.
 - Duration-weighted scores and event detection for uniform and irregular
@@ -222,7 +222,7 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
   UI-line angles, and maximum distance).
 - Frustum opacity and geometry/diagnostic visibility controls for inspection.
 - Current-frame receiver-eye markers and bidirectional pass/fail diagnostics for
-  containment, distance, facing, and validity, evaluated by the shared engine.
+  containment, distance, receiver FOV, and validity, evaluated by the shared engine.
   This visual review includes loaded recordings; whole-recording scores and
   timeline integration remain in Phase 5.
 
@@ -245,7 +245,7 @@ Implement the pure NumPy model and analysis layers using synthetic fixtures:
 ### Developer tests
 
 - Run unit tests for UI lines, frustum planes, containment boundaries, display
-  modes, facing thresholds, invalid frames, state reduction, scores, and events.
+  modes, receiver-FOV boundaries, invalid frames, state reduction, scores, and events.
 - Add invariance checks for rigid transforms and participant swapping where
   applicable.
 - Check numerical behavior at exact angular, distance, and frustum boundaries.
@@ -323,13 +323,13 @@ Run whole-recording bidirectional analysis and expose its current-frame and
 summary results:
 
 - Analyze A's active frustums against B's eye sockets and vice versa.
-- Apply head-facing, maximum-distance, and valid-data conditions.
+- Apply receiver-FOV, maximum-distance, and valid-data conditions.
 - Show above-head indicators describing what each participant can currently see.
 - Display current per-eye state and the core directional percentages.
 - Recompute results in a background worker when relevant parameters change.
 - Debounce rapid control changes and discard superseded worker results.
 - Keep current-frame feedback responsive while whole-recording results update.
-- Expose diagnostic pass/fail information for containment, facing, distance, and
+- Expose diagnostic pass/fail information for containment, receiver FOV, distance, and
   data validity.
 
 ### Completion criteria
@@ -824,7 +824,7 @@ ratio 1:1. Two center offsets describe right/up displacement relative to each
 lens center, defaulting to zero. The UI line replaces the name chief ray; its
 azimuth and elevation default to zero. Horizontal and vertical FOV are derived
 internally. Maximum distance and display mode share the Waveguide group; the
-receiver head-facing threshold remains outside that group. All controls initially
+Receiver FOV remains in its own settings group. All controls initially
 use simple edit fields, with the graphical editor explicitly deferred to Phase 10.
 
 The Phase 3 numeric implementation and automated tests are ready for review.

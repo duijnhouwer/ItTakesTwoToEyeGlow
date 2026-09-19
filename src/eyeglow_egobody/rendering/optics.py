@@ -5,6 +5,7 @@ import pyvista as pv
 from vtkmodules.vtkCommonDataModel import vtkPlane, vtkPlaneCollection
 from vtkmodules.vtkRenderingCore import vtkBillboardTextActor3D
 from eyeglow_egobody.analysis.geometry import build_frustum, waveguide_centers, valid_transform
+from eyeglow_egobody.model.parameters import EYEBALL_RADIUS_MM
 from .materials import eye_sphere_source, eye_spheres
 
 FRUSTUM_FACES = np.array([4,0,1,2,3, 4,4,7,6,5, 4,0,4,5,1, 4,1,5,6,2,
@@ -93,7 +94,7 @@ class OpticalScene:
     def update(self, recording, frame, parameters, result, opacity=.10,
                show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
                subject_colors=COLORS, eye_glow_color=PASS_COLOR):
-        self.marker_source.SetRadius(parameters.eyeball_radius_mm/1000 + .003)
+        self.marker_source.SetRadius(EYEBALL_RADIUS_MM / 1000 + .003)
         for participant, pair in enumerate(self.eyes):
             transform = recording.heads[participant,frame]
             eyes = None if recording.eyes is None else recording.eyes[participant,frame]

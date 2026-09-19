@@ -1,4 +1,5 @@
 from pathlib import Path
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QFileDialog, QDialog, QMessageBox
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, default_filename, choose_file
 from eyeglow_egobody.model.recording import synthetic_recording
@@ -72,6 +73,51 @@ class FakeViewport(QWidget):
     def capture_size(self): return (self.width(),self.height())
 
 
+def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_path):
+    from eyeglow_egobody.ui import main_window
+    monkeypatch.setattr(main_window,'Viewport',FakeViewport)
+    window = main_window.MainWindow(tmp_path)
+    window.controller.timer.stop()
+    try:
+        available = window.screen().availableGeometry().size()
+        expected_width = max(720, min(
+            1200, int(available.width() * .80),
+            int((available.height() * .88 - 48) * 1.5)))
+        assert window.size().width() == expected_width
+        assert window.size().height() == round(expected_width * 2 / 3) + 48
+        assert window.minimumSize().width() == 720
+        assert window.minimumSize().height() == 528
+        assert [window.smartglasses_dock.isHidden(), window.visualization_dock.isHidden(),
+                window.recordings_dock.isHidden()] == [True, True, True]
+        assert window.smartglasses_toggle.text() == '◀ Smartglasses'
+        assert window.visualization_toggle.text() == 'Visualization ▼'
+        assert window.recordings_toggle.text() == 'Recordings ▶'
+        window.smartglasses_toggle.click()
+        window.visualization_toggle.click()
+        window.recordings_toggle.click()
+        assert window.smartglasses_toggle.text() == '▶ Smartglasses'
+        assert window.visualization_toggle.text() == 'Visualization ▲'
+        assert window.recordings_toggle.text() == 'Recordings ◀'
+        assert set(window.smartglasses_panel.groups) == {'smartglasses','receiver_fov'}
+        assert set(window.display_settings_editor.groups) == {'visualization'}
+        assert not window.show_ui_lines.isChecked()
+        assert window.viewport.show_ui_lines is False
+        assert window.display_settings_button.text() == '⚙ Viewport settings...'
+        assert window.display_settings_button.toolTip() == 'Display settings'
+        window.display_settings_button.click()
+        assert not window.display_settings_dialog.isHidden()
+        assert not window.display_settings_dialog.isModal()
+        assert window.eye_test_button.text() == 'Eye-test details...'
+        window.show_eye_test_details()
+        assert not window.visibility_dialog.isHidden()
+        assert window.corner(Qt.Corner.TopLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
+        assert window.corner(Qt.Corner.BottomLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
+        assert window.corner(Qt.Corner.TopRightCorner) == Qt.DockWidgetArea.RightDockWidgetArea
+        assert window.corner(Qt.Corner.BottomRightCorner) == Qt.DockWidgetArea.RightDockWidgetArea
+    finally:
+        window.close()
+
+
 def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
     from eyeglow_egobody.ui import main_window
     monkeypatch.setattr(main_window,'Viewport',FakeViewport)
@@ -80,13 +126,11 @@ def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
     controller.timer.stop()
     try:
         assert not hasattr(window,'export_range')
-        file_menu = window.menuBar().actions()[0]
-        assert file_menu.text() == 'File'
-        assert [a for a in file_menu.menu().actions() if not a.isSeparator()] == [window.screenshot_action, window.video_action, window.settings_action]
-        assert window.screenshot_action.text() == 'Export screenshot ...'
-        assert window.video_action.text() == 'Export video ...'
-        assert not hasattr(window, 'screenshot_button')
-        assert not hasattr(window, 'video_button')
+        assert not window.menuBar().actions()
+        assert window.screenshot_button.text() == 'Export screenshot…'
+        assert window.video_button.text() == 'Export video…'
+        assert window.screenshot_button.parent() is window.recordings_panel
+        assert window.video_button.parent() is window.recordings_panel
         controller.state.playing = True
         sizes = []
         def reject(dialog):
@@ -96,24 +140,24 @@ def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
             return QDialog.DialogCode.Rejected
         monkeypatch.setattr(VideoExportDialog,'exec',reject)
         window.viewport.resize(640,480)
-        window.video_action.trigger()
+        window.video_button.click()
         window.viewport.resize(800,600)
-        window.video_action.trigger()
+        window.video_button.click()
         assert sizes == [(640,480),(800,600)]
         assert controller.state.playing and controller.export_start == 0
         calls = []
         monkeypatch.setattr(main_window,'choose_file',lambda *args: tmp_path/'scene.png')
         monkeypatch.setattr(controller,'save_screenshot',lambda path,overwrite: calls.append((path,overwrite)))
-        window.screenshot_action.trigger()
+        window.screenshot_button.click()
         assert calls == [(tmp_path/'scene.png',True)]
         controller.job = object()
         window.sync()
-        assert not window.screenshot_action.isEnabled()
-        assert not window.video_action.isEnabled()
+        assert not window.screenshot_button.isEnabled()
+        assert not window.video_button.isEnabled()
         controller.job = None
         window.sync()
-        assert window.screenshot_action.isEnabled()
-        assert window.video_action.isEnabled()
+        assert window.screenshot_button.isEnabled()
+        assert window.video_button.isEnabled()
         assert default_filename(controller.recording,False) == Path.home()/'Pictures'/'synthetic_motion.png'
     finally:
         window.close()

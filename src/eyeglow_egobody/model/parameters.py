@@ -3,6 +3,8 @@ from dataclasses import dataclass, fields
 from enum import Enum
 import math
 
+EYEBALL_RADIUS_MM = 12.0
+
 
 class DisplayMode(str, Enum):
     MONOCULAR_LEFT = 'monocular_left'
@@ -10,9 +12,13 @@ class DisplayMode(str, Enum):
     BINOCULAR = 'binocular'
 
 
+class ReceiverFovShape(str, Enum):
+    ELLIPTICAL = 'elliptical'
+    RECTANGULAR = 'rectangular'
+
+
 @dataclass(frozen=True)
 class OpticalParameters:
-    eyeball_radius_mm: float = 12.0
     eye_relief_mm: float = 13.0
     expander_width_mm: float = 20.0
     expander_height_mm: float = 20.0
@@ -23,14 +29,18 @@ class OpticalParameters:
     ui_line_azimuth_deg: float = 0.0
     ui_line_elevation_deg: float = 0.0
     maximum_distance_m: float = 5.0
-    head_facing_threshold_deg: float = 90.0
+    receiver_fov_left_deg: float = 60.0
+    receiver_fov_right_deg: float = 60.0
+    receiver_fov_top_deg: float = 45.0
+    receiver_fov_bottom_deg: float = 70.0
+    receiver_fov_shape: ReceiverFovShape = ReceiverFovShape.ELLIPTICAL
     display_mode: DisplayMode = DisplayMode.BINOCULAR
 
     def __post_init__(self):
         for field in fields(self):
-            if field.name != 'display_mode' and not math.isfinite(getattr(self, field.name)):
+            if field.name not in {'display_mode', 'receiver_fov_shape'} and not math.isfinite(getattr(self, field.name)):
                 raise ValueError(f'{field.name} must be finite')
-        for name in ('eyeball_radius_mm', 'expander_width_mm', 'expander_height_mm',
+        for name in ('expander_width_mm', 'expander_height_mm',
                      'horizontal_vertical_fov_ratio', 'maximum_distance_m'):
             if getattr(self, name) <= 0:
                 raise ValueError(f'{name} must be positive')
@@ -38,11 +48,16 @@ class OpticalParameters:
             raise ValueError('eye_relief_mm must be nonnegative')
         if not 0 < self.diagonal_fov_deg < 180:
             raise ValueError('diagonal_fov_deg must be between 0 and 180, exclusive')
-        if not 0 <= self.head_facing_threshold_deg <= 180:
-            raise ValueError('head_facing_threshold_deg must be between 0 and 180')
+        for name in ('receiver_fov_left_deg', 'receiver_fov_right_deg'):
+            if not 0 < getattr(self, name) < 180:
+                raise ValueError(f'{name} must be between 0 and 180, exclusive')
+        for name in ('receiver_fov_top_deg', 'receiver_fov_bottom_deg'):
+            if not 0 < getattr(self, name) <= 90:
+                raise ValueError(f'{name} must be greater than 0 and at most 90')
         if any(abs(a) >= 89 for a in (self.ui_line_azimuth_deg, self.ui_line_elevation_deg)):
             raise ValueError('UI line angles must be strictly between -89 and 89 degrees')
         object.__setattr__(self, 'display_mode', DisplayMode(self.display_mode))
+        object.__setattr__(self, 'receiver_fov_shape', ReceiverFovShape(self.receiver_fov_shape))
 
     @classmethod
     def from_settings(cls, values):

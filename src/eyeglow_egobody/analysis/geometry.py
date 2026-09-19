@@ -9,7 +9,7 @@ not a calibrated off-axis optical projection or refraction simulation.
 """
 from dataclasses import dataclass
 import numpy as np
-from eyeglow_egobody.model.parameters import OpticalParameters
+from eyeglow_egobody.model.parameters import EYEBALL_RADIUS_MM, OpticalParameters
 
 BOUNDARY_TOLERANCE_M = 1e-9
 
@@ -33,7 +33,7 @@ def valid_transform(transform):
 def waveguide_centers(eyes, rotation, parameters):
     """Centers relative to each rear lens center; common right/up, not mirrored."""
     offset = np.array([parameters.expander_offset_right_mm,
-                       parameters.eyeball_radius_mm + parameters.eye_relief_mm,
+                       EYEBALL_RADIUS_MM + parameters.eye_relief_mm,
                        parameters.expander_offset_up_mm]) / 1000
     return np.asarray(eyes) + (np.asarray(rotation) @ offset)[..., None, :]
 

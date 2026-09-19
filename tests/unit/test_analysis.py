@@ -3,7 +3,7 @@ import subprocess
 import sys
 import numpy as np
 import pytest
-from eyeglow_egobody.model.parameters import OpticalParameters, DisplayMode
+from eyeglow_egobody.model.parameters import OpticalParameters, DisplayMode, ReceiverFovShape
 from eyeglow_egobody.analysis.geometry import build_frustum, ui_line_direction, waveguide_centers
 from eyeglow_egobody.analysis.visibility import analyze_visibility, reduce_state, VisibilityState as S
 from eyeglow_egobody.analysis.scores import summarize, detect_events
@@ -27,8 +27,8 @@ def test_analysis_imports_are_headless():
 @pytest.mark.parametrize('change', [dict(expander_width_mm=0),dict(expander_height_mm=-1),
     dict(diagonal_fov_deg=180),dict(diagonal_fov_deg=0),dict(horizontal_vertical_fov_ratio=0),
     dict(ui_line_azimuth_deg=89),dict(ui_line_elevation_deg=-89),dict(eye_relief_mm=-1),
-    dict(maximum_distance_m=0),dict(head_facing_threshold_deg=181),dict(expander_offset_up_mm=np.nan),
-    dict(display_mode='nope')])
+    dict(maximum_distance_m=0),dict(receiver_fov_left_deg=180),dict(receiver_fov_top_deg=91),
+    dict(expander_offset_up_mm=np.nan),dict(receiver_fov_shape='nope'),dict(display_mode='nope')])
 def test_invalid_parameters(change):
     with pytest.raises(ValueError):
         OpticalParameters(**change)
@@ -85,11 +85,11 @@ def test_containment_matches_independent_sheared_rectangle_formula():
 def test_bidirectional_visible_none_and_invalid():
     heads, eyes = pair(4)
     eyes[:,1,:,0] += np.array([0,10])[:,None]
-    heads[1,2,:3,:3] = np.eye(3)  # same facing: B fails facing; B emits away
+    heads[1,2,:3,:3] = np.eye(3)  # same facing: B's patch centers fall outside A's receiver FOV
     eyes[0,3,0,0] = np.nan
     result = analyze_visibility(heads,eyes)
     np.testing.assert_array_equal(result.states,[[3,0,0,-1],[3,0,0,-1]])
-    assert not result.diagnostics[1].facing_pass[2]
+    assert not result.diagnostics[1].receiver_fov_pass[2].any()
     assert np.isnan(result.diagnostics[0].plane_distances_m[3]).all()
 
 
@@ -117,16 +117,38 @@ def test_distance_exact_boundary_and_just_beyond():
     assert not result.diagnostics[0].distance_pass.any()
 
 
-def test_facing_exact_boundary_and_just_beyond():
-    heads,eyes = pair()
-    p = OpticalParameters(head_facing_threshold_deg=0)
-    assert (analyze_visibility(heads,eyes,parameters=p).states == 3).all()
-    heads[0,0,:3,:3] = np.array([[0,-1,0],[1,0,0],[0,0,1]])
-    p = replace(p,head_facing_threshold_deg=90)
-    d = analyze_visibility(heads,eyes,parameters=p).diagnostics[0]
-    assert d.facing_angle_deg[0] == pytest.approx(90)
-    assert d.facing_pass[0]
-    assert not analyze_visibility(heads,eyes,parameters=replace(p,head_facing_threshold_deg=89.999)).diagnostics[0].facing_pass[0]
+def _bearing(azimuth, elevation):
+    azimuth, elevation = np.radians([azimuth, elevation])
+    return [np.sin(azimuth)*np.cos(elevation),
+            np.cos(azimuth)*np.cos(elevation), np.sin(elevation)]
+
+
+def test_receiver_fov_defaults_and_asymmetric_rectangular_boundaries():
+    from eyeglow_egobody.analysis.visibility import receiver_fov_contains
+    defaults = OpticalParameters()
+    assert (defaults.receiver_fov_left_deg, defaults.receiver_fov_right_deg,
+            defaults.receiver_fov_top_deg, defaults.receiver_fov_bottom_deg,
+            defaults.receiver_fov_shape) == (60, 60, 45, 70, ReceiverFovShape.ELLIPTICAL)
+    p = replace(defaults, receiver_fov_left_deg=60, receiver_fov_right_deg=40,
+                receiver_fov_top_deg=45, receiver_fov_bottom_deg=70,
+                receiver_fov_shape=ReceiverFovShape.RECTANGULAR)
+    angles = [(-60, 0), (40, 0), (0, 45), (0, -70), (-60.001, 0),
+              (40.001, 0), (0, 45.001), (0, -70.001)]
+    azimuth, elevation, inside = receiver_fov_contains([_bearing(*angle) for angle in angles], p)
+    np.testing.assert_allclose(azimuth, [a for a, _ in angles], atol=1e-12)
+    np.testing.assert_allclose(elevation, [e for _, e in angles], atol=1e-12)
+    np.testing.assert_array_equal(inside, [1, 1, 1, 1, 0, 0, 0, 0])
+
+
+def test_elliptical_receiver_fov_uses_quadrant_extents():
+    from eyeglow_egobody.analysis.visibility import receiver_fov_contains
+    p = OpticalParameters(receiver_fov_left_deg=60, receiver_fov_right_deg=40,
+                          receiver_fov_top_deg=45, receiver_fov_bottom_deg=70)
+    root = np.sqrt(.5)
+    angles = [(40*root, 45*root), (-60*root, 45*root),
+              (-60*root, -70*root), (40*.8, 45*.8)]
+    _, _, inside = receiver_fov_contains([_bearing(*angle) for angle in angles], p)
+    np.testing.assert_array_equal(inside, [1, 1, 1, 0])
 
 
 @pytest.mark.parametrize('kind',['flag','nan','reflection','scale','homogeneous'])

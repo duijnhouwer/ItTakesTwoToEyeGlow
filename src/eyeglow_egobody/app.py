@@ -16,8 +16,9 @@ def main():
     args = parser.parse_args()
     os.environ['QT_API'] = 'pyside6'
     from PySide6.QtCore import QStandardPaths
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QMessageBox
     from eyeglow_egobody.export.paths import safe_directory
+    from eyeglow_egobody.model.panel_settings import SettingsSession
     from eyeglow_egobody.ui.main_window import MainWindow
     from eyeglow_egobody.ui.window_decoration import configure_window_decoration
     configure_window_decoration()
@@ -34,9 +35,53 @@ def main():
         output = safe_directory(output)
     except (ValueError,OSError) as exc:
         parser.error(str(exc))
-    window = MainWindow(output, dataset=None if args.synthetic or args.smoke_test else args.dataset, model_dir=args.model_dir)
+    try:
+        settings_session = SettingsSession()
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        parser.error(f'Could not initialize settings: {exc}')
+    if settings_session.recovery_pending:
+        if args.smoke_test:
+            # Smoke runs are intentionally disposable and must not wait for UI input.
+            settings_session.use_user_defaults()
+        elif not _choose_recovered_settings(settings_session, QMessageBox):
+            return 0
+    window = MainWindow(output, dataset=None if args.synthetic or args.smoke_test else args.dataset,
+                        model_dir=args.model_dir, settings_session=settings_session)
     window.show()
     if args.smoke_test:
         from eyeglow_egobody.smoke import start_smoke
         start_smoke(app,window,output)
     return app.exec()
+
+
+def _choose_recovered_settings(session, message_box_type):
+    """Ask before constructing the viewport that would consume recovered state."""
+    dialog = message_box_type()
+    dialog.setIcon(message_box_type.Icon.Warning)
+    dialog.setWindowTitle('Recover settings')
+    dialog.setText('EyeGlow EgoBody did not close properly.')
+    detail = ('The saved live settings can be restored for this session, or replaced '
+              'with your saved defaults or the bundled factory defaults.')
+    if session.recovery_error:
+        detail += ('\n\nThe recovered settings are invalid or incompatible and cannot be restored: '
+                   f'{session.recovery_error}')
+    dialog.setInformativeText(detail)
+    restore = dialog.addButton('Restore recovered settings', message_box_type.ButtonRole.AcceptRole)
+    restore.setEnabled(session.recovery_error is None)
+    user_defaults = dialog.addButton('Use user defaults', message_box_type.ButtonRole.ActionRole)
+    factory_defaults = dialog.addButton('Use factory defaults', message_box_type.ButtonRole.ActionRole)
+    cancel = dialog.addButton('Cancel', message_box_type.ButtonRole.RejectRole)
+    dialog.setDefaultButton(restore if restore.isEnabled() else user_defaults)
+    dialog.exec()
+    choice = dialog.clickedButton()
+    if choice is restore and restore.isEnabled():
+        session.restore_recovered_settings()
+    elif choice is user_defaults:
+        session.use_user_defaults()
+    elif choice is factory_defaults:
+        session.use_factory_defaults()
+    elif choice is cancel:
+        return False
+    else:
+        return False
+    return True

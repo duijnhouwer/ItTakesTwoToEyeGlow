@@ -9,6 +9,7 @@ hidden = collect_submodules('pyvista') + collect_submodules('vtkmodules')
 hidden += ['numpy.core.multiarray', 'numpy.core.numeric',
            'numpy._core.multiarray', 'numpy._core.numeric']
 data = collect_data_files('pyvista') + copy_metadata('pyvista') + collect_data_files('imageio_ffmpeg')
+data.append(('config/settings_factory_default.json', 'config'))
 binaries = []
 if sys.platform.startswith('linux'):
     from PySide6.QtCore import qVersion

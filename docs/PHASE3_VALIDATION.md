@@ -19,8 +19,10 @@ Settings exposes the group through simple edit fields, including:
 | Maximum analysis distance | 5 m | Finite volume length plus per-pair distance limit |
 | Display mode | `binocular` | Also `monocular_left`, `monocular_right` |
 
-The receiver head-facing threshold is separate from the Waveguide group and
-defaults to 90°. Eyeball radius and eye relief retain their existing controls.
+The Receiver FOV has its own settings group. Left/right default to 60°/60° and
+top/bottom to 45°/70° around receiver head-forward. Its default shape is
+elliptical; rectangular is also available. Eyeball radius and eye relief retain
+their existing controls.
 The user's pre-existing eye-relief value of 12 mm is preserved; its factory
 default remains 13 mm. Factory Reset stages changes; Save validates and persists
 all values atomically. Cancel does not persist. JSON metadata still controls
@@ -67,10 +69,15 @@ Phase 5; the graphical waveguide editor remains Phase 10.
   also be within maximum distance, inclusively. This can reject far corners
   inside the rectangular volume. The finite volume and radial cutoff are both
   intentional, distinct diagnostic tests.
-- Receiver head-facing compares receiver head +Y with the vector from receiver
-  head origin to the emitter's rear-lens midpoint. The angle threshold is
-  inclusive within 1e-9 degrees. A coincident origin/target fails facing because
-  there is no defined direction. This is potential visibility, never gaze.
+- Receiver FOV is evaluated independently for every emitting patch / receiving
+  eye pair. The vector from the receiving eye to the emitting patch center is
+  expressed in receiver-head coordinates (+X right, +Y forward, +Z up). Its
+  azimuth and elevation are tested against the configured left/right and
+  top/bottom extents. Rectangular mode tests the two extents independently.
+  Elliptical mode uses the applicable quadrant limits and accepts
+  `(azimuth / horizontal_limit)^2 + (elevation / vertical_limit)^2 <= 1`.
+  Boundaries are inclusive. A coincident eye/patch center fails because it has
+  no defined direction. This is potential visibility, never gaze.
 
 ## States and diagnostics
 
@@ -83,13 +90,15 @@ Result row 0 means **A sees B**; row 1 means **B sees A**. States identify the
 **receiving** left/right eye, not the emitting display:
 `INVALID=-1`, `NONE=0`, `LEFT_EYE=1`, `RIGHT_EYE=2`, `BOTH_EYES=3`.
 Each receiver eye can be illuminated by either active emitting waveguide.
-Containment, radial distance, facing, and data validity must all pass.
+Containment, radial distance, receiver FOV, and data validity must all pass for
+the same emitting patch / receiving eye pair.
 
 Both directions are invalid when either participant has invalid data, nonfinite
 eyes/transforms, an improper rotation, or a nonhomogeneous transform. Numeric
 diagnostics for invalid frames are NaN and diagnostic pass flags are false.
 For valid frames, diagnostics preserve all four emitter/receiver eye pair tests,
-per-plane distances, per-pair distances, facing angles, activation, and final
+per-plane distances, per-pair distances, receiver azimuth/elevation, FOV shape,
+activation, and final
 receiver-eye results.
 
 ## Time and summary conventions
@@ -120,7 +129,7 @@ Run from `code-repo`:
 Developer result: **148 tests passed**, including the existing regression suite.
 New coverage includes FOV extremes, signed plane boundaries, independent analytic
 containment checks, display activation, each visibility state, exact distance and
-facing boundaries, invalid poses, rigid-transform and participant-swap invariance,
+receiver-FOV boundaries, invalid poses, rigid-transform and participant-swap invariance,
 uniform/irregular time, events, headless imports, grouped settings persistence,
 validation, controller updates, and staged reset/cancel behavior. The settings
 dialog was rendered offscreen and visually inspected; evidence is in the ignored
@@ -187,7 +196,7 @@ The plan-only change is commit `fbe9a12`. Phase 3 now includes visual review:
   in the caption, eye-test panel, and colored receiver-eye rings.
 - Green means pass, red means fail, gray means invalid. Eye labels identify the
   receiving participant and anatomical left/right eye. Per-window containment
-  and distance tests, facing angle/threshold, and validity are inspectable.
+  distance tests, receiver azimuth/elevation and FOV, and validity are inspectable.
 - File → Settings / Waveguide settings immediately updates current-frame optics
   after Save. Display mode activates the matching emitting windows only.
 - Frustums, UI lines, local axes, and eye tests have visibility toggles. Frustum
@@ -213,7 +222,7 @@ Both native source and rebuilt-package visual smoke tests passed on Linux with
 40 persistent actors, FHD/4K screenshots, and a 60-frame MP4 export. The packaged
 playback heartbeat p95 was 0.062 seconds. Real-recording review also loaded
 `recording_20210907_S02_S01_01` (1,290 frames) and rendered four active frustums.
-At frame 1, both directions correctly reported NONE: facing and distance passed,
+At frame 1, both directions correctly reported NONE: receiver FOV and distance passed,
 but all receiver-eye/window containment tests failed. The visible red eye rings
 and numeric panel agreed. Real-data screenshots and the diagnostic report are
 in `.runtime/phase3-visual-real/`. Source and packaged inspection screenshots

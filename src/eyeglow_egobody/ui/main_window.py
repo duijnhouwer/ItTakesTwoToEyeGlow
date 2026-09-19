@@ -6,13 +6,14 @@ import numpy as np
 from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
-                               QMessageBox,QDialog,QStyle,QFileDialog,QTextEdit,QDockWidget)
+                               QMessageBox,QDialog,QStyle,QFileDialog,QTextEdit,QDockWidget,
+                               QToolButton)
 from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.runtime_paths import default_models
 from eyeglow_egobody.controller import Controller
 from eyeglow_egobody.model.panel_settings import PanelSettings
-from eyeglow_egobody.ui.settings_dialog import SettingsDialog
+from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
 from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
 
@@ -34,58 +35,80 @@ def suspend_animation(method):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, output_root, dataset=None, model_dir=None):
+    def __init__(self, output_root, dataset=None, model_dir=None, settings_session=None):
         super().__init__()
         self.setWindowTitle('EyeGlow EgoBody — Paired motion playback')
         self.dataset = dataset
         self.model_dir = model_dir or default_models()
         self.infos = []
-        self.panel_settings = PanelSettings()
-        self.resize(1200,840)
+        self.settings_session = settings_session
+        self.panel_settings = (settings_session.current if settings_session is not None
+                               else PanelSettings())
+        # Size the first-run viewport at 3:2 landscape while leaving room for the
+        # bottom button rail and the desktop's reserved areas.
+        available = self.screen().availableGeometry().size()
+        rail_height = 48
+        viewport_width = min(
+            1200,
+            int(available.width() * .80),
+            int((available.height() * .88 - rail_height) * 1.5),
+        )
+        viewport_width = max(720, viewport_width)
+        viewport_height = round(viewport_width * 2 / 3)
+        self.resize(viewport_width, viewport_height + rail_height)
+        self.setMinimumSize(720, 480 + rail_height)
         self._export_size_limits = None
         root = QWidget()
         layout = QVBoxLayout(root)
-        title = QLabel('EyeGlow EgoBody · Paired motion playback')
-        title.setStyleSheet('font-size: 21px; font-weight: bold; padding: 8px')
-        layout.addWidget(title)
-        layout.addWidget(QLabel('Smartglasses geometry and current-frame potential visibility · File → Settings to edit optics'))
-        browser = QHBoxLayout()
-        self.recordings = QComboBox()
-        self.recordings.setMinimumContentsLength(35)
-        browser.addWidget(self.recordings,1)
-        self.synthetic_button = QPushButton('Synthetic review')
-        self.synthetic_button.clicked.connect(self.load_synthetic_review)
-        browser.addWidget(self.synthetic_button)
-        self.load_button = QPushButton('Load recording')
-        self.models_button = QPushButton('SMPL-X model folder…')
-        self.diagnostics_button = QPushButton('Diagnostics…')
-        for widget in (self.load_button,self.models_button,self.diagnostics_button):
-            browser.addWidget(widget)
-        layout.addLayout(browser)
-        self.metadata_label = QLabel('Discovering recordings…' if dataset else 'Synthetic fixture · invented motion')
-        self.metadata_label.setWordWrap(True)
-        self.metadata_label.setTextFormat(Qt.TextFormat.PlainText)
-        layout.addWidget(self.metadata_label)
+        layout.setContentsMargins(0,0,0,0)
+        layout.setSpacing(0)
         recording = (Recording(np.array([0.]), np.zeros((2,1,16,3)),
                                np.tile(np.eye(4),(2,1,1,1)), name='No recording loaded',
                                valid=np.zeros((2,1),dtype=bool)) if dataset else synthetic_recording())
         self.viewport = Viewport(root,recording)
         self.viewport.optical_settings = self.panel_settings.values
+        self.viewport.show_ui_lines = False
         self.viewport.set_frame(0,.10)
         layout.addWidget(self.viewport.interactor,1)
         self.controller = Controller(recording,self.viewport,output_root,self)
-        self.controls = QWidget()
-        controls_layout = QVBoxLayout(self.controls)
-        camera = QHBoxLayout()
-        controls_layout.addLayout(camera)
-        def button(label,callback,row,tooltip=None):
+
+        def button(label, callback, row=None, tooltip=None):
             widget = QPushButton(label)
             if tooltip:
                 widget.setToolTip(tooltip)
                 widget.setAccessibleName(tooltip)
             widget.clicked.connect(callback)
-            row.addWidget(widget)
+            if row is not None:
+                row.addWidget(widget)
             return widget
+
+        # The only persistent chrome around the viewport is this three-button rail.
+        panel_buttons = QHBoxLayout()
+        panel_buttons.setContentsMargins(8,6,8,6)
+        self.smartglasses_toggle = button('◀ Smartglasses', lambda: self._toggle_dock(self.smartglasses_dock))
+        self.visualization_toggle = button('Visualization ▼', lambda: self._toggle_dock(self.visualization_dock))
+        self.recordings_toggle = button('Recordings ▶', lambda: self._toggle_dock(self.recordings_dock))
+        panel_buttons.addWidget(self.smartglasses_toggle)
+        panel_buttons.addStretch(1)
+        panel_buttons.addWidget(self.visualization_toggle)
+        panel_buttons.addStretch(1)
+        panel_buttons.addWidget(self.recordings_toggle)
+        layout.addLayout(panel_buttons)
+        self.setCentralWidget(root)
+
+        self.smartglasses_panel = SettingsEditor(
+            self.panel_settings, ('smartglasses','receiver_fov'), self,
+            save_user_defaults=self._save_user_defaults)
+        self.smartglasses_panel.setMinimumWidth(340)
+        self.smartglasses_panel.saved.connect(self._apply_panel_settings)
+        self.smartglasses_dock = self._make_dock(
+            'Smartglasses', self.smartglasses_panel, Qt.DockWidgetArea.LeftDockWidgetArea,
+            'smartglasses_panel')
+
+        self.controls = QWidget()
+        controls_layout = QVBoxLayout(self.controls)
+        camera = QHBoxLayout()
+        controls_layout.addLayout(camera)
         button('Reset camera',self.viewport.reset_view,camera)
         button('Fit participants',self.viewport.fit_participants,camera)
         button('Fit optics',lambda:self.viewport.fit_optics(),camera)
@@ -108,11 +131,20 @@ class MainWindow(QMainWindow):
         self.viewport.interactor.setToolTip(
             'Orbit (upright): drag · Pan: Shift + drag · Zoom: scroll')
         camera.addStretch()
-        button('Smartglasses settings…',self.show_settings,camera)
+        self.display_settings_button = QToolButton()
+        self.display_settings_button.setText('⚙ Viewport settings...')
+        self.display_settings_button.setToolTip('Display settings')
+        self.display_settings_button.setAccessibleName('Display settings')
+        camera.addWidget(self.display_settings_button)
+        self.display_settings_dialog = QDialog(self)
+        self.display_settings_dialog.setWindowTitle('Viewport settings')
+        self.display_settings_dialog.setModal(False)
+        self.display_settings_dialog.resize(620,520)
+        display_settings_layout = QVBoxLayout(self.display_settings_dialog)
         optical = QHBoxLayout()
-        controls_layout.addLayout(optical)
+        display_settings_layout.addLayout(optical)
         for title, attribute, checked in (('Frustums','show_frustums',True),
-                                         ('UI lines','show_ui_lines',True),
+                                         ('UI lines','show_ui_lines',False),
                                          ('Local axes','show_axes',False)):
             checkbox = QCheckBox(title)
             checkbox.setChecked(checked)
@@ -127,15 +159,24 @@ class MainWindow(QMainWindow):
         self.frustum_opacity.valueChanged.connect(self.controller.set_frustum_opacity)
         optical.addWidget(self.frustum_opacity)
         optical.addStretch()
-        self.visibility_dock = QDockWidget('Current-frame eye tests',self)
-        self.visibility_dock.setObjectName('visibility_diagnostics')
+        self.display_settings_editor = SettingsEditor(
+            self.panel_settings, ('visualization',), self.display_settings_dialog,
+            save_user_defaults=self._save_user_defaults)
+        self.display_settings_editor.saved.connect(self._apply_panel_settings)
+        display_settings_layout.addWidget(self.display_settings_editor)
+        self.display_settings_button.clicked.connect(self.show_display_settings)
+        eye_test_row = QHBoxLayout()
+        eye_test_row.addStretch(1)
+        self.eye_test_button = button('Eye-test details...',self.show_eye_test_details,eye_test_row)
+        controls_layout.addLayout(eye_test_row)
+        self.visibility_dialog = QDialog(self)
+        self.visibility_dialog.setWindowTitle('Current-frame eye tests')
+        self.visibility_dialog.resize(520,560)
+        visibility_layout = QVBoxLayout(self.visibility_dialog)
         self.visibility_text = QTextEdit()
         self.visibility_text.setReadOnly(True)
         self.visibility_text.setMinimumWidth(320)
-        self.visibility_dock.setWidget(self.visibility_text)
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,self.visibility_dock)
-        self.visibility_dock.hide()
-        button('Eye-test details',lambda:self.visibility_dock.setVisible(not self.visibility_dock.isVisible()),optical)
+        visibility_layout.addWidget(self.visibility_text)
         self.visibility_label = QLabel()
         self.visibility_label.setWordWrap(True)
         controls_layout.addWidget(self.visibility_label)
@@ -175,26 +216,51 @@ class MainWindow(QMainWindow):
         loop.setChecked(True)
         loop.toggled.connect(lambda v:setattr(self.controller.state,'loop',v))
         row.addWidget(loop)
-        file_menu = self.menuBar().addMenu('File')
-        self.screenshot_action = file_menu.addAction('Export screenshot ...')
-        self.screenshot_action.triggered.connect(lambda:self.choose_export(False))
-        self.video_action = file_menu.addAction('Export video ...')
-        self.video_action.triggered.connect(lambda:self.choose_export(True))
-        file_menu.addSeparator()
-        self.settings_action = file_menu.addAction('Settings ...')
-        self.settings_action.triggered.connect(self.show_settings)
-        layout.addWidget(self.controls)
+        self.visualization_dock = self._make_dock(
+            'Visualization', self.controls, Qt.DockWidgetArea.BottomDockWidgetArea,
+            'visualization_panel')
+
+        recordings_panel = QWidget()
+        recordings_panel.setMinimumWidth(280)
+        recordings_layout = QVBoxLayout(recordings_panel)
+        self.recordings = QComboBox()
+        self.recordings.setMinimumContentsLength(28)
+        recordings_layout.addWidget(self.recordings)
+        self.metadata_label = QLabel('Discovering recordings…' if dataset else 'Synthetic fixture · invented motion')
+        self.metadata_label.setWordWrap(True)
+        self.metadata_label.setTextFormat(Qt.TextFormat.PlainText)
+        recordings_layout.addWidget(self.metadata_label)
+        self.synthetic_button = button('Synthetic review', self.load_synthetic_review, recordings_layout)
+        self.load_button = button('Load recording', self.load_selected, recordings_layout)
+        self.models_button = button('SMPL-X model folder…', self.choose_models, recordings_layout)
+        self.diagnostics_button = button('Diagnostics…', self.show_diagnostics, recordings_layout)
+        self.screenshot_button = button('Export screenshot…', lambda:self.choose_export(False), recordings_layout)
+        self.video_button = button('Export video…', lambda:self.choose_export(True), recordings_layout)
+        recordings_layout.addStretch(1)
         self.cancel = QPushButton('Cancel export')
         self.cancel.clicked.connect(self.controller.cancel_export)
         policy = self.cancel.sizePolicy()
         policy.setRetainSizeWhenHidden(True)
         self.cancel.setSizePolicy(policy)
         self.cancel.setVisible(False)
-        layout.addWidget(self.cancel)
-        self.setCentralWidget(root)
-        self.load_button.clicked.connect(self.load_selected)
-        self.models_button.clicked.connect(self.choose_models)
-        self.diagnostics_button.clicked.connect(self.show_diagnostics)
+        recordings_layout.addWidget(self.cancel)
+        self.recordings_panel = recordings_panel
+        self.recordings_dock = self._make_dock(
+            'Recordings', recordings_panel, Qt.DockWidgetArea.RightDockWidgetArea,
+            'recordings_panel')
+
+        # Side panels own both corners so they extend beside (and visually eat
+        # into) the bottom Visualization dock instead of stopping above it.
+        self.setCorner(Qt.Corner.TopLeftCorner, Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.setCorner(Qt.Corner.BottomLeftCorner, Qt.DockWidgetArea.LeftDockWidgetArea)
+        self.setCorner(Qt.Corner.TopRightCorner, Qt.DockWidgetArea.RightDockWidgetArea)
+        self.setCorner(Qt.Corner.BottomRightCorner, Qt.DockWidgetArea.RightDockWidgetArea)
+
+        for dock in (self.smartglasses_dock,self.visualization_dock,self.recordings_dock):
+            dock.hide()
+        self.smartglasses_dock.visibilityChanged.connect(self._sync_panel_buttons)
+        self.visualization_dock.visibilityChanged.connect(self._sync_panel_buttons)
+        self.recordings_dock.visibilityChanged.connect(self._sync_panel_buttons)
         self.recordings.currentIndexChanged.connect(self.describe_selected)
         self.controller.recordings_found.connect(self.found_recordings)
         self.controller.load_failed.connect(self.metadata_label.setText)
@@ -203,9 +269,57 @@ class MainWindow(QMainWindow):
         self.controller.status.connect(self.statusBar().showMessage)
         self.controller.export_failed.connect(lambda message: QMessageBox.warning(self, 'Export failed', message))
         self.statusBar().showMessage('Choose where to save each screenshot or video.')
+        self.statusBar().hide()
         self.controller.refresh()
         if dataset:
             self.controller.discover_recordings(dataset)
+
+    def _make_dock(self, title, widget, area, object_name):
+        dock = QDockWidget(title,self)
+        dock.setObjectName(object_name)
+        dock.setWidget(widget)
+        dock.setAllowedAreas(area)
+        dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
+        self.addDockWidget(area,dock)
+        return dock
+
+    def _toggle_dock(self, dock):
+        dock.setVisible(dock.isHidden())
+        self._sync_panel_buttons()
+
+    def _sync_panel_buttons(self, *_):
+        self.smartglasses_toggle.setText(
+            ('▶' if not self.smartglasses_dock.isHidden() else '◀') + ' Smartglasses')
+        self.visualization_toggle.setText(
+            'Visualization ' + ('▲' if not self.visualization_dock.isHidden() else '▼'))
+        self.recordings_toggle.setText(
+            'Recordings ' + ('◀' if not self.recordings_dock.isHidden() else '▶'))
+
+    def _apply_panel_settings(self):
+        self.controller.optical_parameters = self.panel_settings.optical_parameters
+        self.viewport.optical_settings = self.panel_settings.values
+        self.controller.refresh()
+        self.statusBar().showMessage('Settings updated')
+
+    def _save_user_defaults(self, values):
+        if self.settings_session is not None:
+            try:
+                self.settings_session.save_user_defaults(values)
+            except (OSError, ValueError) as exc:
+                QMessageBox.warning(self, 'Could not save new defaults', str(exc))
+                return False
+        self.statusBar().showMessage('Saved as new defaults')
+        return True
+
+    def show_eye_test_details(self):
+        self.visibility_dialog.show()
+        self.visibility_dialog.raise_()
+        self.visibility_dialog.activateWindow()
+
+    def show_display_settings(self):
+        self.display_settings_dialog.show()
+        self.display_settings_dialog.raise_()
+        self.display_settings_dialog.activateWindow()
 
     def inspect_participant(self, participant):
         self.orbit.setChecked(False)
@@ -217,7 +331,7 @@ class MainWindow(QMainWindow):
         self.controller.set_recording(synthetic_recording())
         self.metadata_label.setText('Synthetic review · invented paired motion · settings apply to both participants')
         self.orbit.setChecked(False)
-        self.visibility_dock.show()
+        self.show_eye_test_details()
 
     def set_optical_visibility(self, key, visible):
         setattr(self.viewport,key,visible)
@@ -355,13 +469,22 @@ class MainWindow(QMainWindow):
         self.recordings.setEnabled(not busy and not loading)
         self.models_button.setEnabled(not busy and not loading)
         self.controls.setEnabled(not busy and not loading and usable)
-        self.screenshot_action.setEnabled(not busy and not loading and usable)
-        self.video_action.setEnabled(not busy and not loading and usable)
-        self.settings_action.setEnabled(not busy)
+        self.smartglasses_panel.setEnabled(not busy)
+        self.screenshot_button.setEnabled(not busy and not loading and usable)
+        self.video_button.setEnabled(not busy and not loading and usable)
         self.viewport.setEnabled(not busy)
         self.cancel.setVisible(busy)
 
     def closeEvent(self,event):
         self.controller.close()
         self.viewport.close()
+        self.display_settings_dialog.close()
+        self.visibility_dialog.close()
+        if self.settings_session is not None:
+            try:
+                self.settings_session.clean_close()
+            except OSError as exc:
+                # Leaving Current in place is safer than pretending a clean close succeeded.
+                QMessageBox.warning(self, 'Settings recovery retained',
+                                    f'Could not clear live settings: {exc}')
         event.accept()
