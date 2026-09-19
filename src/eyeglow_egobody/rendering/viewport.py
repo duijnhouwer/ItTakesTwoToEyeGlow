@@ -11,6 +11,23 @@ from eyeglow_egobody.analysis.geometry import valid_transform
 from eyeglow_egobody.analysis.diagnostics import visibility_summary
 from .optics import OpticalScene, update_points
 
+ROOM_SIZE_M = 5.0
+
+
+def room_geometry(recording):
+    """Return the visible floor center and invisible cubic room bounds."""
+    valid_points = recording.joints[recording.valid]
+    finite_points = valid_points[np.isfinite(valid_points).all(axis=-1)]
+    xy = finite_points[:, :2].mean(axis=0) if finite_points.size else np.zeros(2)
+    floor = float(recording.metadata.get('floor_proxy_z_m', 0.))
+    half = ROOM_SIZE_M / 2
+    center = np.array([xy[0], xy[1], floor])
+    bounds = (xy[0] - half, xy[0] + half,
+              xy[1] - half, xy[1] + half,
+              floor, floor + ROOM_SIZE_M)
+    return center, bounds
+
+
 class Viewport(QtInteractor):
     def __init__(self, parent, recording):
         super().__init__(parent, auto_update=False, multi_samples=0)
@@ -27,8 +44,12 @@ class Viewport(QtInteractor):
         self.set_background('#172330')
         # Azimuth/elevation orbit keeps world Z upright and does not roll.
         self.enable_terrain_style(mouse_wheel_zooms=True, shift_pans=True)
-        self.ground = pv.Plane(i_size=5,j_size=4)
+        ground_center, self.room_bounds = room_geometry(recording)
+        self.ground = pv.Plane(center=ground_center, i_size=ROOM_SIZE_M, j_size=ROOM_SIZE_M)
         self.add_mesh(self.ground, color='#53606c', opacity=.3)
+        self.room = pv.Box(bounds=self.room_bounds)
+        self.add_mesh(self.room, color='#83909c', style='wireframe', opacity=.45,
+                      line_width=1, lighting=False)
         self.add_axes(color='white')
         self.parts = []
         self.stable_actors = []
@@ -57,6 +78,7 @@ class Viewport(QtInteractor):
             self.participant_actors.append(tuple(self.stable_actors[-5:]))
         # Keep captions plain: pipes trigger VTK MathText table rendering.
         self.optics = OpticalScene(self)
+        self.optics.set_clip_bounds(self.room_bounds)
         self.stable_actors.extend(self.optics.actors)
         self.caption = self.add_text('Shared optical geometry - Potential visibility',font_size=10,color='white')
         self.set_frame(0,.10)
@@ -64,10 +86,10 @@ class Viewport(QtInteractor):
 
     def set_recording(self, recording):
         self.recording = recording
-        valid_points = recording.joints[recording.valid]
-        center = valid_points.mean(axis=(0,1)) if valid_points.size else np.zeros(3)
-        center[2] = recording.metadata.get('floor_proxy_z_m', 0.)
-        self.ground.points = pv.Plane(center=center, i_size=5, j_size=4).points
+        center, self.room_bounds = room_geometry(recording)
+        self.ground.points = pv.Plane(center=center, i_size=ROOM_SIZE_M, j_size=ROOM_SIZE_M).points
+        self.room.points = pv.Box(bounds=self.room_bounds).points
+        self.optics.set_clip_bounds(self.room_bounds)
         lines = np.column_stack((np.full(len(recording.bones),2),recording.bones)).ravel()
         for p, (skeleton, _, label) in enumerate(self.parts):
             skeleton.points = np.nan_to_num(recording.joints[p,0]).copy()

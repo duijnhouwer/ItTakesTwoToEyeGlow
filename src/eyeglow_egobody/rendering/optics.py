@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 import numpy as np
 import pyvista as pv
+from vtkmodules.vtkCommonDataModel import vtkPlane, vtkPlaneCollection
 from vtkmodules.vtkRenderingCore import vtkBillboardTextActor3D
 from eyeglow_egobody.analysis.geometry import build_frustum, waveguide_centers, valid_transform
 from .materials import eye_sphere_source, eye_spheres
@@ -35,6 +36,7 @@ class OpticalScene:
     def __init__(self, plotter):
         self.eyes = []
         self.actors = []
+        self.clip_planes = None
         self.marker_source = eye_sphere_source(.015)
         for participant, color in enumerate(COLORS):
             pair = []
@@ -64,6 +66,29 @@ class OpticalScene:
                 pair.append(OpticalEye(window,frustum,ui_line,tuple(axes),marker,label,actors))
                 self.actors.extend(actors)
             self.eyes.append(pair)
+
+    def set_clip_bounds(self, bounds):
+        """Clip rendered frustum surfaces to an axis-aligned room."""
+        x_min, x_max, y_min, y_max, z_min, z_max = bounds
+        planes = vtkPlaneCollection()
+        for origin, normal in (
+            ((x_min, 0., 0.), (1., 0., 0.)),
+            ((x_max, 0., 0.), (-1., 0., 0.)),
+            ((0., y_min, 0.), (0., 1., 0.)),
+            ((0., y_max, 0.), (0., -1., 0.)),
+            ((0., 0., z_min), (0., 0., 1.)),
+            ((0., 0., z_max), (0., 0., -1.)),
+        ):
+            plane = vtkPlane()
+            plane.SetOrigin(*origin)
+            plane.SetNormal(*normal)
+            planes.AddItem(plane)
+        self.clip_planes = planes
+        for pair in self.eyes:
+            for part in pair:
+                mapper = part.actors[1].GetMapper()
+                if mapper is not None:
+                    mapper.SetClippingPlanes(planes)
 
     def update(self, recording, frame, parameters, result, opacity=.10,
                show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,

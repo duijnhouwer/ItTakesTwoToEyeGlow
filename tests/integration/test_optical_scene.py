@@ -3,7 +3,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 import pyvista as pv
-from vtkmodules.vtkRenderingCore import vtkActor, vtkRenderer
+from vtkmodules.vtkRenderingCore import vtkActor, vtkPolyDataMapper, vtkRenderer
 from eyeglow_egobody.rendering.optics import OpticalScene
 from eyeglow_egobody.analysis.geometry import build_frustum, waveguide_centers
 from eyeglow_egobody.analysis.visibility import analyze_recording
@@ -17,6 +17,7 @@ class ActorFactory:
         self.renderer = vtkRenderer()
     def add_mesh(self, mesh, **kwargs):
         actor = vtkActor()
+        actor.SetMapper(vtkPolyDataMapper())
         self.renderer.AddActor(actor)
         return actor
 
@@ -100,6 +101,23 @@ def test_display_toggles_never_change_analysis(scene):
     expected = analyze_recording(recording,p).states.copy()
     scene.update(recording,0,p,None,show_frustums=False,show_ui_lines=False,show_axes=True,show_eye_tests=False)
     np.testing.assert_array_equal(analyze_recording(recording,p).states,expected)
+
+
+def test_frustum_surfaces_are_clipped_by_all_six_room_planes(scene):
+    bounds = (-2.5, 2.5, -2.5, 2.5, 0., 5.)
+    scene.set_clip_bounds(bounds)
+    for pair in scene.eyes:
+        for part in pair:
+            mapper = part.actors[1].GetMapper()
+            assert mapper.GetNumberOfClippingPlanes() == 6
+            planes = mapper.GetClippingPlanes()
+            assert all(planes.GetItem(i).EvaluateFunction((0., 0., 1.)) >= 0
+                       for i in range(6))
+            assert any(planes.GetItem(i).EvaluateFunction((3., 0., 1.)) < 0
+                       for i in range(6))
+            assert all(actor.GetMapper().GetNumberOfClippingPlanes() == 0
+                       for actor in part.actors if actor is not part.actors[1]
+                       and hasattr(actor, 'GetMapper'))
 
 
 def test_glow_color_fills_patch_and_frustum_while_subject_color_marks_edges(scene):

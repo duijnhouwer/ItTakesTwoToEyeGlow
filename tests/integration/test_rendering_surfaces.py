@@ -3,6 +3,8 @@ import numpy as np
 import pyvista as pv
 import pytest
 from eyeglow_egobody.rendering.materials import eye_sphere_source, eye_spheres
+from eyeglow_egobody.rendering.viewport import ROOM_SIZE_M, room_geometry
+from eyeglow_egobody.model.recording import synthetic_recording
 
 
 def test_eye_spheres_follow_centers_and_millimeter_radius_changes():
@@ -22,3 +24,16 @@ def test_eye_spheres_follow_centers_and_millimeter_radius_changes():
     assert spheres.GetOutput().GetBounds()[5] == pytest.approx(1.815, abs=1e-6)
     assert spheres.GetOutput().GetPointData().GetNormals() is not None
 
+
+def test_room_uses_square_ground_as_floor_of_invisible_cube():
+    recording = synthetic_recording()
+    center, bounds = room_geometry(recording)
+    assert bounds[1] - bounds[0] == pytest.approx(ROOM_SIZE_M)
+    assert bounds[3] - bounds[2] == pytest.approx(ROOM_SIZE_M)
+    assert bounds[5] - bounds[4] == pytest.approx(ROOM_SIZE_M)
+    assert center[2] == bounds[4] == recording.metadata.get('floor_proxy_z_m', 0.)
+    assert center[0] == pytest.approx((bounds[0] + bounds[1]) / 2)
+    assert center[1] == pytest.approx((bounds[2] + bounds[3]) / 2)
+    room = pv.Box(bounds=bounds)
+    assert room.n_cells == 6
+    np.testing.assert_allclose(room.bounds, bounds)
