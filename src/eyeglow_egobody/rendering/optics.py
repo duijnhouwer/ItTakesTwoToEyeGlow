@@ -66,7 +66,8 @@ class OpticalScene:
             self.eyes.append(pair)
 
     def update(self, recording, frame, parameters, result, opacity=.10,
-               show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True):
+               show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
+               subject_colors=COLORS):
         self.marker_source.SetRadius(parameters.eyeball_radius_mm/1000 + .003)
         for participant, pair in enumerate(self.eyes):
             transform = recording.heads[participant,frame]
@@ -92,18 +93,15 @@ class OpticalScene:
                     update_points(mesh,[geometry.center,geometry.center + rotation[:,axis]*.06])
                 update_points(part.marker,eyes[eye:eye+1])
                 part.actors[0].SetVisibility(active)
+                color = pv.Color(subject_colors[participant]).float_rgb
+                for actor in part.actors[:3]:
+                    actor.GetProperty().SetColor(color)
                 part.actors[1].SetVisibility(active and show_frustums)
                 part.actors[1].GetProperty().SetOpacity(opacity)
                 part.actors[2].SetVisibility(active and show_ui_lines)
                 for actor in part.actors[3:6]:
                     actor.SetVisibility(active and show_axes)
-                valid = result is not None and bool(result.diagnostics[participant].valid[0])
-                passed = valid and bool(result.diagnostics[participant].visible_eyes[0,eye])
-                color = PASS_COLOR if passed else FAIL_COLOR if valid else INVALID_COLOR
-                part.actors[6].GetProperty().SetColor(pv.Color(color).float_rgb)
-                part.actors[6].SetVisibility(show_eye_tests)
-                part.label.SetInput(f'{"AB"[participant]} {"LR"[eye]}: ' + ('PASS' if passed else 'FAIL' if valid else 'INVALID'))
-                part.label.GetTextProperty().SetColor(pv.Color(color).float_rgb)
-                # Separate anatomical eye labels in local space.
-                part.label.SetPosition(*(eyes[eye] + rotation @ np.array([-.045 if eye == 0 else .045,0,.045])))
-                part.label.SetVisibility(show_eye_tests)
+                # Eye state is now communicated by the anatomical eyeball color in Viewport.
+                # Retain the old actors for stable scene lifetime, but never show pass/fail text.
+                part.actors[6].SetVisibility(False)
+                part.label.SetVisibility(False)

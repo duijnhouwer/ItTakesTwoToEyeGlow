@@ -109,26 +109,31 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
     from eyeglow_egobody.rendering.materials import eye_sphere_source
     viewport = SimpleNamespace(recording=recording, optical_settings=dict(eyeball_radius_mm=12, eye_relief_mm=13),
                                parts=[], eye_parts=[], stable_actors=[], participant_actors=[],
-                               optics=SimpleNamespace(update=lambda *args: None), current_visibility=None,
+                               optics=SimpleNamespace(update=lambda *args, **kwargs: None), current_visibility=None,
                                show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
                                eye_sphere=eye_sphere_source(.012), update=lambda: None,
                                caption=SimpleNamespace(SetText=lambda *args: None))
     for p in range(2):
-        actors = [vtkActor() for _ in range(4)]
+        actors = [vtkActor() for _ in range(5)]
         viewport.participant_actors.append(actors)
         viewport.stable_actors.extend(actors)
         viewport.parts.append((pv.PolyData(np.zeros((16,3))),pv.PolyData(np.zeros((GLASSES_POINT_COUNT,3))),
                                actors[2]))
-        viewport.eye_parts.append((pv.PolyData(np.zeros((2,3))),actors[3]))
+        viewport.eye_parts.append((pv.PolyData(np.zeros((2,3))),
+                                   ((pv.PolyData(np.zeros((1,3))), actors[3]),
+                                    (pv.PolyData(np.zeros((1,3))), actors[4]))))
     actors = tuple(viewport.stable_actors)
     Viewport.set_frame(viewport, 120, .35)
     for p in range(2):
-        np.testing.assert_allclose(viewport.eye_parts[p][0].points, recording.eyes[p,120])
-        assert viewport.eye_parts[p][1].GetVisibility()
+        eyes, eye_parts = viewport.eye_parts[p]
+        np.testing.assert_allclose(eyes.points, recording.eyes[p,120])
+        for eye, (eye_mesh, eye_actor) in enumerate(eye_parts):
+            np.testing.assert_allclose(eye_mesh.points, recording.eyes[p,120,eye:eye + 1])
+            assert eye_actor.GetVisibility()
     recording.valid[0,120] = False
     Viewport.set_frame(viewport, 120, .35)
-    assert all(not a.GetVisibility() for a in actors[:4])
-    assert all(a.GetVisibility() for a in actors[4:])
+    assert all(not a.GetVisibility() for a in actors[:5])
+    assert all(a.GetVisibility() for a in actors[5:])
     recording.valid[0,120] = True
     Viewport.set_frame(viewport, 120, .35)
     assert all(a.GetVisibility() for a in actors)
@@ -176,14 +181,18 @@ def test_factory_defaults_are_validated_and_distinct_from_default(qt_app, store)
 def test_waveguide_group_edits_persist_and_derive_fov(qt_app, store):
     from PySide6.QtWidgets import QGroupBox
     dialog = SettingsDialog(store)
-    assert dialog.findChild(QGroupBox, 'waveguide').title() == 'Waveguide'
+    assert dialog.findChild(QGroupBox, 'smartglasses').title() == 'Smartglasses'
     changes = dict(expander_width_mm='24.5', expander_height_mm='18',
                    expander_offset_right_mm='-2', expander_offset_up_mm='3',
                    diagonal_fov_deg='30', horizontal_vertical_fov_ratio='2',
                    ui_line_azimuth_deg='5', ui_line_elevation_deg='-4',
                    maximum_distance_m='4', display_mode='monocular_left')
     for key, value in changes.items():
-        dialog.fields[key].setText(value)
+        field = dialog.fields[key]
+        if hasattr(field, 'setCurrentIndex'):
+            field.setCurrentIndex(field.findData(value))
+        else:
+            field.setText(value)
     dialog.accept()
     assert dialog.result() == QDialog.DialogCode.Accepted
     loaded = PanelSettings(store.path)
@@ -193,19 +202,19 @@ def test_waveguide_group_edits_persist_and_derive_fov(qt_app, store):
     assert p.expander_width_mm == 24.5
     assert p.ui_line_elevation_deg == -4
     for key in changes:
-        assert loaded.document['settings']['waveguide'][key]['value'] == loaded.values[key]
+        assert loaded.document['settings']['smartglasses'][key]['value'] == loaded.values[key]
     dialog = SettingsDialog(loaded)
     dialog.factory_reset.click()
     dialog.accept()
     assert loaded.optical_parameters.expander_width_mm == 20
     assert loaded.optical_parameters.diagonal_fov_deg == 20
     assert loaded.optical_parameters.horizontal_vertical_fov_ratio == 1
-    assert loaded.optical_parameters.display_mode == 'binocular'
+    assert loaded.optical_parameters.display_mode == 'monocular_right'
 
 
 @pytest.mark.parametrize('key,value', [('expander_width_mm','0'),('diagonal_fov_deg','180'),
     ('horizontal_vertical_fov_ratio','1:1'),('horizontal_vertical_fov_ratio','0'),
-    ('ui_line_elevation_deg','89'),('display_mode','invalid')])
+    ('ui_line_elevation_deg','89')])
 def test_waveguide_invalid_edits_are_atomic(qt_app, store, key, value):
     before = store.path.read_bytes()
     dialog = SettingsDialog(store)
@@ -218,9 +227,32 @@ def test_waveguide_invalid_edits_are_atomic(qt_app, store, key, value):
 
 def test_json_metadata_cannot_override_physical_validation(store):
     document = json.loads(store.path.read_text())
-    spec = document['settings']['waveguide']['diagonal_fov_deg']
+    spec = document['settings']['smartglasses']['diagonal_fov_deg']
     spec['max'] = 360
     spec['value'] = 200
     store.path.write_text(json.dumps(document))
     with pytest.raises(ValueError, match='diagonal_fov'):
         PanelSettings(store.path)
+
+
+def test_smartglasses_and_visualization_controls_persist(qt_app, store):
+    from PySide6.QtWidgets import QCheckBox, QComboBox, QGroupBox, QPushButton
+    dialog = SettingsDialog(store)
+    assert dialog.findChild(QGroupBox, 'smartglasses').title() == 'Smartglasses'
+    assert dialog.findChild(QGroupBox, 'visualization').title() == 'Visualization'
+    mode = dialog.fields['display_mode']
+    assert isinstance(mode, QComboBox)
+    assert [mode.itemText(i) for i in range(mode.count())] == ['Binocular', 'Mono left', 'Mono right']
+    assert mode.currentText() == 'Mono right'
+    assert isinstance(dialog.fields['eye_glow_color'], QPushButton)
+    assert isinstance(dialog.fields['subject_a_label_visible'], QCheckBox)
+    mode.setCurrentIndex(mode.findData('binocular'))
+    dialog._set_color_button(dialog.fields['eye_glow_color'], '#123456')
+    dialog.fields['subject_a_label'].setText('Lead')
+    dialog.fields['subject_a_label_visible'].setChecked(False)
+    dialog.accept()
+    values = PanelSettings(store.path).values
+    assert values['display_mode'] == 'binocular'
+    assert values['eye_glow_color'] == '#123456'
+    assert values['subject_a_label'] == 'Lead'
+    assert values['subject_a_label_visible'] is False

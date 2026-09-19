@@ -19,7 +19,7 @@
       "precision": 1,
       "factory_default": 13.0
     },
-    "waveguide": {
+    "smartglasses": {
       "expander_width_mm": {
         "display_name": "Eyebox expander width (mm)",
         "value": 20.0,
@@ -94,7 +94,7 @@
       },
       "maximum_distance_m": {
         "display_name": "Maximum analysis distance (m)",
-        "value": 1.0,
+        "value": 6.0,
         "default": 5,
         "min": 0.01,
         "max": 100,
@@ -103,14 +103,65 @@
       },
       "display_mode": {
         "display_name": "Display mode",
-        "value": "binocular",
-        "default": "binocular",
-        "factory_default": "binocular",
+        "value": "monocular_right",
+        "default": "monocular_right",
+        "factory_default": "monocular_right",
         "choices": [
+          "binocular",
           "monocular_left",
-          "monocular_right",
-          "binocular"
+          "monocular_right"
         ]
+      },
+      "eye_glow_color": {
+        "display_name": "Eye glow color",
+        "kind": "color",
+        "value": "#10f5ed",
+        "default": "#64f59b",
+        "factory_default": "#64f59b"
+      }
+    },
+    "visualization": {
+      "subject_a_color": {
+        "display_name": "Subject A color",
+        "kind": "color",
+        "value": "#0000ff",
+        "default": "#59c9f1",
+        "factory_default": "#59c9f1"
+      },
+      "subject_b_color": {
+        "display_name": "Subject B color",
+        "kind": "color",
+        "value": "#aa0000",
+        "default": "#ffb56b",
+        "factory_default": "#ffb56b"
+      },
+      "subject_a_label": {
+        "display_name": "Subject A label",
+        "kind": "text",
+        "value": "A",
+        "default": "A",
+        "factory_default": "A"
+      },
+      "subject_a_label_visible": {
+        "display_name": "Show",
+        "kind": "boolean",
+        "value": true,
+        "default": true,
+        "factory_default": true
+      },
+      "subject_b_label": {
+        "display_name": "Subject B label",
+        "kind": "text",
+        "value": "B",
+        "default": "B",
+        "factory_default": "B"
+      },
+      "subject_b_label_visible": {
+        "display_name": "Show",
+        "kind": "boolean",
+        "value": true,
+        "default": true,
+        "factory_default": true
       }
     },
     "head_facing_threshold_deg": {

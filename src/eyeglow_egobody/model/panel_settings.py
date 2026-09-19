@@ -5,6 +5,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import tempfile
 from eyeglow_egobody.runtime_paths import project_root
 from .parameters import OpticalParameters
@@ -15,6 +16,19 @@ def settings_path():
 
 
 def validate_value(spec, value):
+    kind = spec.get('kind')
+    if kind == 'color':
+        if not isinstance(value, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', value):
+            raise ValueError('choose a valid color')
+        return value.lower()
+    if kind == 'text':
+        if not isinstance(value, str):
+            raise ValueError('enter text')
+        return value
+    if kind == 'boolean':
+        if type(value) is not bool:
+            raise ValueError('choose on or off')
+        return value
     if "choices" in spec:
         if value not in spec["choices"]:
             raise ValueError("choose " + ", ".join(spec["choices"]))
@@ -43,7 +57,7 @@ def setting_specs(document):
 
 
 def format_value(spec, value):
-    return str(value) if 'choices' in spec else f"{value:.{spec['precision']}f}"
+    return str(value) if 'choices' in spec or spec.get('kind') in {'color', 'text'} else f"{value:.{spec['precision']}f}"
 
 
 class PanelSettings:
@@ -57,6 +71,12 @@ class PanelSettings:
             raise ValueError('Required optical settings are missing')
         specs = setting_specs(self.document)
         for key, spec in specs.items():
+            if isinstance(spec, dict) and spec.get('kind') in {'color', 'text', 'boolean'}:
+                if not isinstance(spec.get('display_name'), str) or not spec['display_name']:
+                    raise ValueError(f'Invalid setting definition: {key}')
+                for field in ('value', 'default', 'factory_default'):
+                    validate_value(spec, spec.get(field))
+                continue
             if isinstance(spec, dict) and "choices" in spec:
                 if not isinstance(spec.get("display_name"), str) or not spec["display_name"] or not isinstance(spec["choices"], list) or not spec["choices"] or not all(isinstance(v, str) for v in spec["choices"]):
                     raise ValueError(f"Invalid setting definition: {key}")

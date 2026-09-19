@@ -127,3 +127,34 @@ def test_png_dialog_rejects_other_extensions(qt_app,monkeypatch,tmp_path):
     monkeypatch.setattr(QMessageBox,'warning',lambda *args: warnings.append(args[2]))
     assert choose_file(None,tmp_path/'scene.png',False) is None
     assert 'Only PNG' in warnings[0]
+
+
+def test_modal_dialogs_stop_clock_and_restore_after_nested_error(qt_app, monkeypatch, tmp_path):
+    import pytest
+    from time import monotonic
+    from eyeglow_egobody.ui import main_window
+    monkeypatch.setattr(main_window, 'Viewport', FakeViewport)
+    window = main_window.MainWindow(tmp_path)
+    controller = window.controller
+    controller.state.playing = True
+    controller.set_orbit_enabled(True)
+    frame = controller.state.frame
+    def nested_dialog(dialog):
+        assert not controller.timer.isActive()
+        assert controller.state.frame == frame
+        controller.last = 0
+        raise RuntimeError('picker failed')
+    monkeypatch.setattr(main_window.SettingsDialog, 'exec', nested_dialog)
+    try:
+        with pytest.raises(RuntimeError, match='picker failed'):
+            window.show_settings()
+        assert controller.timer.isActive()
+        assert controller.state.playing and controller.orbit_enabled
+        assert monotonic() - controller.last < 1
+        assert controller.state.frame == frame
+        controller.timer.stop()
+        with pytest.raises(RuntimeError):
+            window.show_settings()
+        assert not controller.timer.isActive()
+    finally:
+        window.close()

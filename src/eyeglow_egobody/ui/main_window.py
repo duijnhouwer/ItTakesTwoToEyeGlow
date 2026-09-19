@@ -1,4 +1,5 @@
 from time import monotonic
+from functools import wraps
 from pathlib import Path
 import json
 import numpy as np
@@ -15,6 +16,23 @@ from eyeglow_egobody.ui.settings_dialog import SettingsDialog
 from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
 
+def suspend_animation(method):
+    """Stop the render clock throughout modal dialogs, including nested pickers."""
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        controller = self.controller
+        running = controller.timer.isActive()
+        controller.timer.stop()
+        try:
+            return method(self, *args, **kwargs)
+        finally:
+            # Never advance by the time spent interacting with the dialog.
+            controller.last = monotonic()
+            if running:
+                controller.timer.start()
+    return wrapped
+
+
 class MainWindow(QMainWindow):
     def __init__(self, output_root, dataset=None, model_dir=None):
         super().__init__()
@@ -30,7 +48,7 @@ class MainWindow(QMainWindow):
         title = QLabel('EyeGlow EgoBody · Paired motion playback')
         title.setStyleSheet('font-size: 21px; font-weight: bold; padding: 8px')
         layout.addWidget(title)
-        layout.addWidget(QLabel('Waveguide geometry and current-frame potential visibility · File → Settings to edit optics'))
+        layout.addWidget(QLabel('Smartglasses geometry and current-frame potential visibility · File → Settings to edit optics'))
         browser = QHBoxLayout()
         self.recordings = QComboBox()
         self.recordings.setMinimumContentsLength(35)
@@ -90,13 +108,12 @@ class MainWindow(QMainWindow):
         self.viewport.interactor.setToolTip(
             'Orbit (upright): drag · Pan: Shift + drag · Zoom: scroll')
         camera.addStretch()
-        button('Waveguide settings…',self.show_settings,camera)
+        button('Smartglasses settings…',self.show_settings,camera)
         optical = QHBoxLayout()
         controls_layout.addLayout(optical)
         for title, attribute, checked in (('Frustums','show_frustums',True),
                                          ('UI lines','show_ui_lines',True),
-                                         ('Local axes','show_axes',False),
-                                         ('Eye tests','show_eye_tests',True)):
+                                         ('Local axes','show_axes',False)):
             checkbox = QCheckBox(title)
             checkbox.setChecked(checked)
             checkbox.toggled.connect(lambda value, key=attribute: self.set_optical_visibility(key,value))
@@ -206,6 +223,7 @@ class MainWindow(QMainWindow):
         setattr(self.viewport,key,visible)
         self.controller.refresh()
 
+    @suspend_animation
     def show_settings(self):
         try:
             # Pick up manual edits to values or display metadata between openings.
@@ -244,12 +262,14 @@ class MainWindow(QMainWindow):
         if info:
             self.controller.load_recording(info, self.model_dir)
 
+    @suspend_animation
     def choose_models(self):
         folder = QFileDialog.getExistingDirectory(self, 'Folder containing SMPLX_MALE.npz / SMPLX_FEMALE.npz', str(self.model_dir))
         if folder:
             self.model_dir = Path(folder)
             self.load_selected()
 
+    @suspend_animation
     def show_diagnostics(self):
         dialog = QDialog(self)
         dialog.setWindowTitle('Recording and placement diagnostics')
@@ -268,6 +288,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(text)
         dialog.exec()
 
+    @suspend_animation
     def choose_export(self, video):
         controller = self.controller
         was_playing = controller.state.playing

@@ -46,11 +46,15 @@ class Viewport(QtInteractor):
             self.stable_actors.append(label)
             self.parts.append((skeleton,glasses,label))
             eyes = pv.PolyData(np.zeros((2,3)))
-            eye_actor = self.add_mesh(eye_spheres(eyes, self.eye_sphere), color=color, specular=0.)
-            eye_actor.GetProperty().SetInterpolationToGouraud()
-            self.eye_parts.append((eyes, eye_actor))
-            self.stable_actors.append(eye_actor)
-            self.participant_actors.append(tuple(self.stable_actors[-4:]))
+            eye_actors = []
+            for eye in range(2):
+                eye_mesh = pv.PolyData(np.zeros((1,3)))
+                eye_actor = self.add_mesh(eye_spheres(eye_mesh, self.eye_sphere), color=color, specular=0.)
+                eye_actor.GetProperty().SetInterpolationToGouraud()
+                eye_actors.append((eye_mesh, eye_actor))
+                self.stable_actors.append(eye_actor)
+            self.eye_parts.append((eyes, tuple(eye_actors)))
+            self.participant_actors.append(tuple(self.stable_actors[-5:]))
         # Keep captions plain: pipes trigger VTK MathText table rendering.
         self.optics = OpticalScene(self)
         self.stable_actors.extend(self.optics.actors)
@@ -75,6 +79,13 @@ class Viewport(QtInteractor):
 
     def set_frame(self, frame, opacity):
         parameters = getattr(self, "optical_parameters", None) or OpticalParameters.from_settings(self.optical_settings)
+        subject_colors = (self.optical_settings.get('subject_a_color', '#59c9f1'),
+                          self.optical_settings.get('subject_b_color', '#ffb56b'))
+        labels = (self.optical_settings.get('subject_a_label', 'A'),
+                  self.optical_settings.get('subject_b_label', 'B'))
+        label_visible = (self.optical_settings.get('subject_a_label_visible', True),
+                         self.optical_settings.get('subject_b_label_visible', True))
+        glow_color = self.optical_settings.get('eye_glow_color', '#64f59b')
         self.eye_sphere.SetRadius(parameters.eyeball_radius_mm/1000.)
         for p,(skeleton,glasses,label) in enumerate(self.parts):
             transform = self.recording.heads[p,frame]
@@ -83,23 +94,36 @@ class Viewport(QtInteractor):
                 actor.SetVisibility(valid)
             if not valid:
                 continue
+            self.participant_actors[p][0].GetProperty().SetColor(pv.Color(subject_colors[p]).float_rgb)
+            if hasattr(label, 'SetInput'):
+                label.SetInput(labels[p])
+                label.GetTextProperty().SetColor(pv.Color(subject_colors[p]).float_rgb)
+                label.SetVisibility(label_visible[p])
             rot,origin = transform[:3,:3],transform[:3,3]
             update_points(skeleton,self.recording.joints[p,frame])
-            eyes_mesh, eye_actor = self.eye_parts[p]
+            eyes_mesh, eye_parts = self.eye_parts[p]
             eye_centers = None if self.recording.eyes is None else self.recording.eyes[p,frame]
             have_eyes = bool(eye_centers is not None and np.isfinite(eye_centers).all())
-            for actor in (self.participant_actors[p][1], eye_actor):
+            for actor in (self.participant_actors[p][1], *(actor for _, actor in eye_parts)):
                 actor.SetVisibility(have_eyes)
             if have_eyes:
                 update_points(eyes_mesh,eye_centers)
+                colors = np.tile(pv.Color(subject_colors[p]).int_rgb, (2, 1))
+                if self.current_visibility is not None:
+                    diagnostic = self.current_visibility.diagnostics[p]
+                    if diagnostic.valid[0]:
+                        colors[diagnostic.visible_eyes[0]] = pv.Color(glow_color).int_rgb
+                for eye, (eye_mesh, eye_actor) in enumerate(eye_parts):
+                    update_points(eye_mesh, eye_centers[eye:eye + 1])
+                    eye_actor.GetProperty().SetColor(colors[eye] / 255)
                 update_points(glasses,glasses_points(eye_centers,rot,parameters.eyeball_radius_mm,parameters.eye_relief_mm))
             label.SetPosition(*(origin + [0,0,.25]))
         self.optics.update(self.recording,frame,parameters,self.current_visibility,opacity,
-                           self.show_frustums,self.show_ui_lines,self.show_axes,self.show_eye_tests)
+                           self.show_frustums,self.show_ui_lines,self.show_axes,self.show_eye_tests,
+                           subject_colors=subject_colors)
         self.caption.SetText(2,f'{self.recording.name} - Frame {frame+1}/{self.recording.frame_count}'
                              f' - source {self.recording.frame_ids[frame]}\n'
-                             + visibility_summary(self.current_visibility).replace('—','-') + '\n'
-                             'Eye rings: green PASS, red FAIL, gray INVALID - potential visibility')
+                             + visibility_summary(self.current_visibility).replace('—','-'))
         # Qt coalesces paints; render explicitly only for export.
         self.update()
 

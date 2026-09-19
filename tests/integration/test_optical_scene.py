@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import pyvista as pv
 from vtkmodules.vtkRenderingCore import vtkActor, vtkRenderer
-from eyeglow_egobody.rendering.optics import OpticalScene, PASS_COLOR, FAIL_COLOR, INVALID_COLOR
+from eyeglow_egobody.rendering.optics import OpticalScene
 from eyeglow_egobody.analysis.geometry import build_frustum, waveguide_centers
 from eyeglow_egobody.analysis.visibility import analyze_recording
 from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
@@ -73,7 +73,7 @@ def test_immediate_parameters_toggles_and_invalid_pose(scene):
     assert not any(a.GetVisibility() for part in scene.eyes[0] for a in part.actors)
 
 
-def test_receiving_eye_colors_and_text_follow_engine(scene):
+def test_optical_scene_hides_pass_fail_labels(scene):
     recording = synthetic_recording()
     p = OpticalParameters()
     # Evaluate a one-frame recording so diagnostics index zero is the current frame.
@@ -86,11 +86,9 @@ def test_receiving_eye_colors_and_text_follow_engine(scene):
         for participant in range(2):
             if not recording.valid[participant,0]:
                 continue
-            for eye,part in enumerate(scene.eyes[participant]):
-                d = result.diagnostics[participant]
-                color = INVALID_COLOR if not d.valid[0] else PASS_COLOR if d.visible_eyes[0,eye] else FAIL_COLOR
-                np.testing.assert_allclose(part.actors[6].GetProperty().GetColor(),pv.Color(color).float_rgb)
-                assert ('INVALID' if invalid else 'PASS') in part.label.GetInput()
+            for part in scene.eyes[participant]:
+                assert not part.actors[6].GetVisibility()
+                assert not part.label.GetVisibility()
         assert ('INVALID' if invalid else 'BOTH_EYES') in visibility_summary(result)
         details = visibility_details(result,p)
         assert ('unusable' if invalid else 'Emitter L: containment') in details
