@@ -100,3 +100,18 @@ def test_display_toggles_never_change_analysis(scene):
     expected = analyze_recording(recording,p).states.copy()
     scene.update(recording,0,p,None,show_frustums=False,show_ui_lines=False,show_axes=True,show_eye_tests=False)
     np.testing.assert_array_equal(analyze_recording(recording,p).states,expected)
+
+
+def test_glow_color_fills_patch_and_frustum_while_subject_color_marks_edges(scene):
+    recording = synthetic_recording()
+    parameters = OpticalParameters()
+    subject_colors = ('#123456', '#abcdef')
+    glow_color = '#fedcba'
+    scene.update(recording, 0, parameters, None, subject_colors=subject_colors,
+                 eye_glow_color=glow_color)
+    for participant, pair in enumerate(scene.eyes):
+        for part in pair:
+            for actor in part.actors[:2]:
+                np.testing.assert_allclose(actor.GetProperty().GetColor(), pv.Color(glow_color).float_rgb)
+                np.testing.assert_allclose(actor.GetProperty().GetEdgeColor(),
+                                           pv.Color(subject_colors[participant]).float_rgb)

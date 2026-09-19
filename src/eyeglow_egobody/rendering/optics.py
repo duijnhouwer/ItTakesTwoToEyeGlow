@@ -67,7 +67,7 @@ class OpticalScene:
 
     def update(self, recording, frame, parameters, result, opacity=.10,
                show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
-               subject_colors=COLORS):
+               subject_colors=COLORS, eye_glow_color=PASS_COLOR):
         self.marker_source.SetRadius(parameters.eyeball_radius_mm/1000 + .003)
         for participant, pair in enumerate(self.eyes):
             transform = recording.heads[participant,frame]
@@ -93,9 +93,14 @@ class OpticalScene:
                     update_points(mesh,[geometry.center,geometry.center + rotation[:,axis]*.06])
                 update_points(part.marker,eyes[eye:eye+1])
                 part.actors[0].SetVisibility(active)
-                color = pv.Color(subject_colors[participant]).float_rgb
-                for actor in part.actors[:3]:
-                    actor.GetProperty().SetColor(color)
+                subject_color = pv.Color(subject_colors[participant]).float_rgb
+                glow_color = pv.Color(eye_glow_color).float_rgb
+                # The expander patch and frustum surface show the emitted glow;
+                # their outlines remain subject-colored for attribution.
+                for actor in part.actors[:2]:
+                    actor.GetProperty().SetColor(glow_color)
+                    actor.GetProperty().SetEdgeColor(subject_color)
+                part.actors[2].GetProperty().SetColor(subject_color)
                 part.actors[1].SetVisibility(active and show_frustums)
                 part.actors[1].GetProperty().SetOpacity(opacity)
                 part.actors[2].SetVisibility(active and show_ui_lines)

@@ -120,7 +120,7 @@ class Viewport(QtInteractor):
             label.SetPosition(*(origin + [0,0,.25]))
         self.optics.update(self.recording,frame,parameters,self.current_visibility,opacity,
                            self.show_frustums,self.show_ui_lines,self.show_axes,self.show_eye_tests,
-                           subject_colors=subject_colors)
+                           subject_colors=subject_colors, eye_glow_color=glow_color)
         self.caption.SetText(2,f'{self.recording.name} - Frame {frame+1}/{self.recording.frame_count}'
                              f' - source {self.recording.frame_ids[frame]}\n'
                              + visibility_summary(self.current_visibility).replace('—','-'))
