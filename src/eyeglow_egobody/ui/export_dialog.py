@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QVBoxLayout, QHBoxLayo
                                QSlider, QAbstractSpinBox)
 from eyeglow_egobody.model.export_settings import VideoSettings
 from eyeglow_egobody.export.paths import safe_destination
+from eyeglow_egobody.ui.file_dialogs import file_dialog
 
 
 def default_filename(recording, video):
@@ -28,7 +29,7 @@ def choose_file(parent, default, video):
     dialog.setNameFilter('MP4 video (*.mp4)' if video else 'PNG image (*.png)')
     dialog.setDefaultSuffix(suffix)
     dialog.selectFile(str(default))
-    while dialog.exec() == QDialog.DialogCode.Accepted:
+    while file_dialog(parent, dialog.exec) == QDialog.DialogCode.Accepted:
         path = Path(dialog.selectedFiles()[0]).expanduser()
         if path.suffix.lower() != '.'+suffix:
             QMessageBox.warning(parent, 'Unsupported format', f'Only {suffix.upper()} is supported. Use a .{suffix} filename.')

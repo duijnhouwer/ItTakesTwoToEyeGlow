@@ -159,3 +159,25 @@ Skeleton line rendering, default lighting, and the translucent ground are retain
 with no Phong highlights or shadows. Placeholder lens rear planes
 sit radius + relief in front of those centers along the head's forward direction
 (25 mm by default). Eye centers come from fitted anatomy, not measured gaze.
+
+### Activity Analysis
+
+Open **Recordings → Activity Analysis…** to select actions independently for
+A (camera wearer) and B (interactee). Search either checklist and use Select all
+or Clear across the full list. Select at least one action on each side; a time
+interval matches when both participants have a selected action. `<undefined>`
+selects unannotated time. All discovered recordings form one population.
+
+**Analyze and save JSONL…** asks for a destination, snapshots the complete current
+settings document, and processes matching motion in the background. The first
+JSONL record contains configuration and selection metadata. Each following record
+describes one paired annotation interval, its original source annotations, and
+duration-weighted potential visibility of A seeing B’s eye glow and vice versa.
+Seeing at least one active glow counts as visible. Invalid pose time is excluded
+from percentages and reported separately; a zero usable duration produces null.
+Concurrent labels stay in one record with conflict indicators. The final motion
+sample has zero duration because there is no following timestamp.
+
+The source dataset is read-only. Cancellation or any processing error leaves the
+destination unchanged; a complete result is published only after the whole batch
+succeeds. Groups, occurrence thresholds, and matrix visualizations are deferred.

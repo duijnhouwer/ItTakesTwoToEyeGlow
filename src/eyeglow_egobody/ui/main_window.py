@@ -6,7 +6,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
-                               QMessageBox,QDialog,QStyle,QFileDialog,QTextEdit,QDockWidget,
+                               QMessageBox,QDialog,QStyle,QTextEdit,QDockWidget,
                                QToolButton)
 from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
@@ -16,21 +16,14 @@ from eyeglow_egobody.model.panel_settings import PanelSettings
 from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
 from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
+from eyeglow_egobody.ui.file_dialogs import existing_directory, paused_animation
 
 def suspend_animation(method):
     """Stop the render clock throughout modal dialogs, including nested pickers."""
     @wraps(method)
     def wrapped(self, *args, **kwargs):
-        controller = self.controller
-        running = controller.timer.isActive()
-        controller.timer.stop()
-        try:
+        with paused_animation(self):
             return method(self, *args, **kwargs)
-        finally:
-            # Never advance by the time spent interacting with the dialog.
-            controller.last = monotonic()
-            if running:
-                controller.timer.start()
     return wrapped
 
 
@@ -41,6 +34,7 @@ class MainWindow(QMainWindow):
         self.dataset = dataset
         self.model_dir = model_dir or default_models()
         self.infos = []
+        self.activity_dialog = None
         self.settings_session = settings_session
         self.panel_settings = (settings_session.current if settings_session is not None
                                else PanelSettings())
@@ -232,6 +226,7 @@ class MainWindow(QMainWindow):
         recordings_layout.addWidget(self.metadata_label)
         self.synthetic_button = button('Synthetic review', self.load_synthetic_review, recordings_layout)
         self.load_button = button('Load recording', self.load_selected, recordings_layout)
+        self.activity_button = button('Activity Analysis…', self.show_activity_analysis, recordings_layout)
         self.models_button = button('SMPL-X model folder…', self.choose_models, recordings_layout)
         self.diagnostics_button = button('Diagnostics…', self.show_diagnostics, recordings_layout)
         self.screenshot_button = button('Export screenshot…', lambda:self.choose_export(False), recordings_layout)
@@ -376,9 +371,26 @@ class MainWindow(QMainWindow):
         if info:
             self.controller.load_recording(info, self.model_dir)
 
+    def show_activity_analysis(self):
+        from eyeglow_egobody.analysis.activities import ActivityCatalog
+        from eyeglow_egobody.ui.activity_dialog import ActivityAnalysisDialog
+        if self.activity_dialog is None:
+            try:
+                catalog = ActivityCatalog(Path(self.dataset) / 'Motion-X-main' / 'mocap-dataset-process' /
+                                          'egobody_description_all.csv')
+                self.activity_dialog = ActivityAnalysisDialog(
+                    self.infos, catalog, lambda: self.panel_settings.document, self.model_dir, self)
+            except (OSError, ValueError, KeyError) as exc:
+                QMessageBox.warning(self, 'Activity annotations unavailable', str(exc))
+                return
+        self.activity_dialog.model_dir = self.model_dir
+        self.activity_dialog.show()
+        self.activity_dialog.raise_()
+        self.activity_dialog.activateWindow()
+
     @suspend_animation
     def choose_models(self):
-        folder = QFileDialog.getExistingDirectory(self, 'Folder containing SMPLX_MALE.npz / SMPLX_FEMALE.npz', str(self.model_dir))
+        folder = existing_directory(self, 'Folder containing SMPLX_MALE.npz / SMPLX_FEMALE.npz', str(self.model_dir))
         if folder:
             self.model_dir = Path(folder)
             self.load_selected()
@@ -466,6 +478,7 @@ class MainWindow(QMainWindow):
         usable = bool(recording.valid.any())
         self.synthetic_button.setEnabled(not busy and not loading)
         self.load_button.setEnabled(not busy and not loading and bool(self.infos))
+        self.activity_button.setEnabled(bool(self.infos))
         self.recordings.setEnabled(not busy and not loading)
         self.models_button.setEnabled(not busy and not loading)
         self.controls.setEnabled(not busy and not loading and usable)
@@ -476,6 +489,8 @@ class MainWindow(QMainWindow):
         self.cancel.setVisible(busy)
 
     def closeEvent(self,event):
+        if self.activity_dialog is not None:
+            self.activity_dialog.shutdown()
         self.controller.close()
         self.viewport.close()
         self.display_settings_dialog.close()
