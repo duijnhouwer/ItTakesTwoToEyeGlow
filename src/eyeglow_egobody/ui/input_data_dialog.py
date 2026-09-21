@@ -2,7 +2,7 @@
 from pathlib import Path
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QHBoxLayout,
                                QLineEdit, QPushButton, QDialogButtonBox, QFileDialog,
-                               QMessageBox, QStyle)
+                               QMessageBox)
 from eyeglow_egobody.runtime_paths import default_dataset, default_models
 from eyeglow_egobody.ui.file_dialogs import existing_directory, file_dialog
 
@@ -42,7 +42,8 @@ class InputDataDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         self.save_defaults = buttons.addButton('Save as new defaults', QDialogButtonBox.ButtonRole.ActionRole)
         standard = QDialogButtonBox(QDialogButtonBox.StandardButton.Save)
-        self.save_defaults.setIcon(standard.button(QDialogButtonBox.StandardButton.Save).icon())
+        self.save_defaults.setIcon(
+            standard.button(QDialogButtonBox.StandardButton.Save).icon())
         standard.deleteLater()
         self.factory_reset = buttons.addButton('Factory Reset', QDialogButtonBox.ButtonRole.ResetRole)
         self.save_defaults.clicked.connect(self.save_as_defaults)

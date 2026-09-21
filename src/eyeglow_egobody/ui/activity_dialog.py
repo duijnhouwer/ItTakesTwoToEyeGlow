@@ -83,7 +83,8 @@ class ActivitiesPlaylistDialog(QDialog):
         self.save_defaults = QPushButton('Save as new defaults')
         # Use the same themed Save icon as the Smartglasses settings panel.
         standard = QDialogButtonBox(QDialogButtonBox.StandardButton.Save)
-        self.save_defaults.setIcon(standard.button(QDialogButtonBox.StandardButton.Save).icon())
+        self.save_defaults.setIcon(
+            standard.button(QDialogButtonBox.StandardButton.Save).icon())
         standard.deleteLater()
         self.save_defaults.clicked.connect(self.save_as_defaults)
         self.factory_reset = QPushButton('Factory Reset')
