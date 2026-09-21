@@ -4,7 +4,8 @@ from PySide6.QtCore import Qt, Signal, QSignalBlocker
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit, QLabel,
                                QDialogButtonBox, QGroupBox, QScrollArea, QWidget, QComboBox,
-                               QPushButton, QColorDialog, QCheckBox, QHBoxLayout)
+                               QPushButton, QColorDialog, QCheckBox, QHBoxLayout,
+                               QDoubleSpinBox)
 from eyeglow_egobody.model.panel_settings import validate_value, format_value
 
 
@@ -19,12 +20,13 @@ class SettingsEditor(QWidget):
     }
 
     def __init__(self, store, groups=None, parent=None, show_buttons=True,
-                 save_user_defaults=None):
+                 save_user_defaults=None, flat_groups=(), scrollable=True):
         super().__init__(parent)
         self.store = store
         self.save_user_defaults = save_user_defaults
         self.live_updates = show_buttons
         self.groups = tuple(groups or store.document['settings'])
+        self.flat_groups = frozenset(flat_groups)
         layout = QVBoxLayout(self)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -32,18 +34,24 @@ class SettingsEditor(QWidget):
         content_layout = QVBoxLayout(content)
         form = QFormLayout()
         content_layout.addLayout(form)
-        scroll.setWidget(content)
-        layout.addWidget(scroll)
+        if scrollable:
+            scroll.setWidget(content)
+            layout.addWidget(scroll)
+        else:
+            layout.addWidget(content)
         self.fields = {}
         self.group_fields = {}
+        self.group_forms = {}
         self.group_factory_reset = {}
         self.group_save = {}
         for key, entry in store.document['settings'].items():
             if key not in self.groups:
                 continue
             self.group_fields[key] = tuple(({key: entry} if 'display_name' in entry else entry).keys())
-            if 'display_name' in entry:
+            if 'display_name' in entry or key in self.flat_groups:
                 entries, target = {key: entry}, form
+                if 'display_name' not in entry:
+                    entries = entry
             else:
                 title = key.replace('_', ' ').title().replace('Fov', 'FOV')
                 group = QGroupBox(title)
@@ -51,6 +59,7 @@ class SettingsEditor(QWidget):
                 target = QFormLayout(group)
                 content_layout.addWidget(group)
                 entries = entry
+            self.group_forms[key] = target
             entries = list(entries.items())
             index = 0
             while index < len(entries):
@@ -92,11 +101,15 @@ class SettingsEditor(QWidget):
                     target.addRow(spec['display_name'], row)
                     index += 2
                 else:
-                    target.addRow(spec['display_name'], field)
+                    if spec.get('kind') == 'boolean':
+                        target.addRow(field)
+                    else:
+                        target.addRow(spec['display_name'], field)
                     index += 1
             if show_buttons and 'display_name' not in entry:
                 self._add_group_buttons(key, target)
-        content_layout.addStretch()
+        if scrollable:
+            content_layout.addStretch()
         self.error = QLabel()
         self.error.setTextFormat(Qt.TextFormat.PlainText)
         self.error.setWordWrap(True)
@@ -146,6 +159,13 @@ class SettingsEditor(QWidget):
             field.clicked.connect(lambda: self._choose_color(name, field))
             self._set_color_button(field, value)
             return field
+        if spec.get('control') == 'spinbox':
+            field = QDoubleSpinBox()
+            field.setRange(spec['min'], spec['max'])
+            field.setDecimals(spec['precision'])
+            field.setSingleStep(spec.get('step', 1))
+            field.setValue(value)
+            return field
         return QLineEdit(format_value(spec, value))
 
     @staticmethod
@@ -170,6 +190,8 @@ class SettingsEditor(QWidget):
             field.currentIndexChanged.connect(lambda: self._commit_fields((name,)))
         elif isinstance(field, QCheckBox):
             field.toggled.connect(lambda: self._commit_fields((name,)))
+        elif isinstance(field, QDoubleSpinBox):
+            field.valueChanged.connect(lambda: self._commit_fields((name,)))
 
     @staticmethod
     def _field_value(field, spec):
@@ -181,6 +203,8 @@ class SettingsEditor(QWidget):
             return field.isChecked()
         if spec.get('kind') == 'color':
             return field.property('color')
+        if isinstance(field, QDoubleSpinBox):
+            return field.value()
         return field.text().strip()
 
     def _set_field_value(self, field, spec, value):
@@ -190,6 +214,8 @@ class SettingsEditor(QWidget):
             field.setChecked(value)
         elif spec.get('kind') == 'color':
             self._set_color_button(field, value)
+        elif isinstance(field, QDoubleSpinBox):
+            field.setValue(value)
         else:
             field.setText(format_value(spec, value))
 

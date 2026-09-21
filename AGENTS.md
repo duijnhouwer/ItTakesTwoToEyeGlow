@@ -19,3 +19,7 @@
 ## Backward compatibility
 
 - DO NOT ADD OR PRESERVE BACKWARD COMPATIBILITY UNLESS THE USER EXPLICITLY ASKS FOR IT.
+
+## Rebuilds
+
+- When the user asks to rebuild the application, run only the packaging/build step. Do not run tests or smoke tests unless the user explicitly requests testing.

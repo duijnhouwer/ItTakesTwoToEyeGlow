@@ -34,6 +34,7 @@ class Viewport(QtInteractor):
         self.recording = recording
         self.optical_settings = dict(eye_relief_mm=13.)
         self.current_visibility = None
+        self.activity_labels = (None, None)
         self.show_frustums = True
         self.show_ui_lines = False
         self.show_axes = False
@@ -107,6 +108,7 @@ class Viewport(QtInteractor):
                   self.optical_settings.get('subject_b_label', 'B'))
         label_visible = (self.optical_settings.get('subject_a_label_visible', True),
                          self.optical_settings.get('subject_b_label_visible', True))
+        activity_labels = getattr(self, 'activity_labels', (None, None))
         glow_color = self.optical_settings.get('eye_glow_color', '#64f59b')
         self.eye_sphere.SetRadius(EYEBALL_RADIUS_MM / 1000)
         for p,(skeleton,glasses,label) in enumerate(self.parts):
@@ -118,7 +120,9 @@ class Viewport(QtInteractor):
                 continue
             self.participant_actors[p][0].GetProperty().SetColor(pv.Color(subject_colors[p]).float_rgb)
             if hasattr(label, 'SetInput'):
-                label.SetInput(labels[p])
+                activity = activity_labels[p] or '<undefined>'
+                text = labels[p].replace('<CURRENT_ACTIVITY>', activity)
+                label.SetInput(text)
                 label.GetTextProperty().SetColor(pv.Color(subject_colors[p]).float_rgb)
                 label.SetVisibility(label_visible[p])
             rot,origin = transform[:3,:3],transform[:3,3]

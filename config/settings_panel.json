@@ -127,6 +127,17 @@
       }
     },
     "visualization": {
+      "frustum_opacity": {
+        "display_name": "Frustum opacity",
+        "value": 0.1,
+        "default": 0.1,
+        "min": 0.0,
+        "max": 1.0,
+        "precision": 2,
+        "step": 0.05,
+        "control": "spinbox",
+        "factory_default": 0.1
+      },
       "subject_a_color": {
         "display_name": "Subject A color",
         "kind": "color",
@@ -144,9 +155,9 @@
       "subject_a_label": {
         "display_name": "Subject A label",
         "kind": "text",
-        "value": "A",
-        "default": "A",
-        "factory_default": "A"
+        "value": "A: <CURRENT_ACTIVITY>",
+        "default": "A: <CURRENT_ACTIVITY>",
+        "factory_default": "A: <CURRENT_ACTIVITY>"
       },
       "subject_a_label_visible": {
         "display_name": "Show",
@@ -158,9 +169,9 @@
       "subject_b_label": {
         "display_name": "Subject B label",
         "kind": "text",
-        "value": "B",
-        "default": "B",
-        "factory_default": "B"
+        "value": "B: <CURRENT_ACTIVITY>",
+        "default": "B: <CURRENT_ACTIVITY>",
+        "factory_default": "B: <CURRENT_ACTIVITY>"
       },
       "subject_b_label_visible": {
         "display_name": "Show",

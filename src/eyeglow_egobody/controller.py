@@ -124,6 +124,12 @@ class Controller(QObject):
             return
         frame = self.source_frame
         recording = self.recording
+        activity_labels = (None, None)
+        if self.playlist is not None:
+            clip, _ = self.playlist.locate(self.state.frame)
+            activity_labels = tuple(', '.join(clip.segment.labels(person))
+                                    for person in range(2))
+        self.viewport.activity_labels = activity_labels
         self.current_visibility = (None if recording.eyes is None else analyze_visibility(
             recording.heads[:,frame:frame+1], recording.eyes[:,frame:frame+1],
             recording.valid[:,frame:frame+1], self.optical_parameters))
@@ -150,7 +156,7 @@ class Controller(QObject):
         self.playlist_resume = False
         self.state = PlaybackState(max(1, playlist.frame_count), playlist.fps,
                                    speed=self.state.speed, loop=self.state.loop)
-        self.export_start, self.export_end = 0, self.recording.frame_count-1
+        self.export_start, self.export_end = 0, max(0, playlist.frame_count-1)
         if playlist.frame_count:
             self._show_playlist_frame()
         else:
@@ -216,8 +222,10 @@ class Controller(QObject):
         self.last = monotonic()
 
     def set_export_range(self, start, end):
-        if not 0 <= start <= end < self.recording.frame_count:
-            raise ValueError('The export range must be inside the recording.')
+        frame_count = (self.playlist.frame_count if self.playlist is not None
+                       else self.recording.frame_count)
+        if not 0 <= start <= end < frame_count:
+            raise ValueError('The export range must be inside the current timeline.')
         if not self.job:
             self.export_start, self.export_end = int(start), int(end)
             self.changed.emit()
@@ -252,10 +260,9 @@ class Controller(QObject):
         self._start_export(destination, True, overwrite, settings)
 
     def _start_export(self, destination, video, overwrite, settings=None):
-        if self.job or self.loading or self.analysis_active or not self.recording.valid.any():
-            return
-        if video and self.playlist is not None:
-            self.export_failed.emit('Load a recording to export a video. Playlist video export is not available.')
+        no_usable_frames = (not self.playlist.frame_count if self.playlist is not None
+                            else not self.recording.valid.any())
+        if self.job or self.loading or self.analysis_active or no_usable_frames:
             return
         try:
             destination = safe_destination(destination)
@@ -265,11 +272,13 @@ class Controller(QObject):
                 raise FileExistsError(f'{destination.name} already exists.')
             temporary = TemporaryDirectory(prefix='.eyeglow-', dir=destination.parent)
             frames = range(self.export_start, self.export_end+1) if video else [self.state.frame]
+            timeline_fps = self.playlist.fps if self.playlist is not None else self.recording.fps
             self.job = dict(temporary=temporary, folder=Path(temporary.name), destination=destination,
-                            frames=frames, video=video, settings=settings or VideoSettings(fps=self.recording.fps),
+                            frames=frames, video=video, settings=settings or VideoSettings(fps=timeline_fps),
                             screenshot_size=self.viewport.capture_size() if not video else None, index=0, future=None, encoding=False, stream=None,
                             overwrite=overwrite, saved_frame=self.state.frame,
-                            saved_playing=self.state.playing, cancelled=Event())
+                            saved_playing=self.state.playing, saved_recording=self.recording,
+                            load_future=None, cancelled=Event())
             self.state.playing = False
             self.changed.emit()
             self.status.emit(f'Exporting to {destination}')
@@ -310,7 +319,24 @@ class Controller(QObject):
                 else:
                     self._commit_export(job['folder']/'frame_00000.png')
                 return
-            self.state.seek(job['frames'][job['index']])
+            timeline_frame = job['frames'][job['index']]
+            if self.playlist is not None:
+                clip, _ = self.playlist.locate(timeline_frame)
+                if self.recording.name != clip.info.name:
+                    if job['load_future'] is None:
+                        from eyeglow_egobody.egobody.loading import load_recording
+                        job['load_future'] = self.load_pool.submit(
+                            load_recording, clip.info, self.playlist_model_dir,
+                            cancelled=job['cancelled'])
+                        self.status.emit(f'Loading {clip.info.name} for video export…')
+                        return
+                    if not job['load_future'].done():
+                        return
+                    recording = job['load_future'].result()
+                    job['load_future'] = None
+                    self.viewport.set_recording(recording)
+                    self.recording = recording
+            self.state.seek(timeline_frame)
             self.refresh()
             size = job['settings'].size if job['video'] else job['screenshot_size']
             pixels = self.viewport.capture(size) if size else self.viewport.capture()
@@ -341,6 +367,9 @@ class Controller(QObject):
         if job['stream'] is not None:
             job['stream'].close()
         job['temporary'].cleanup()
+        if self.recording is not job['saved_recording']:
+            self.recording = job['saved_recording']
+            self.viewport.set_recording(self.recording)
         self.state.seek(job['saved_frame'])
         self.state.playing = job['saved_playing']
         self.last = monotonic()

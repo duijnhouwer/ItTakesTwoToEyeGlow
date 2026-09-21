@@ -128,12 +128,15 @@ def test_smartglasses_panel_updates_current_view(qt_app, store, monkeypatch, tmp
 def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
     from types import SimpleNamespace
     import pyvista as pv
-    from vtkmodules.vtkRenderingCore import vtkActor
+    from vtkmodules.vtkRenderingCore import vtkActor, vtkBillboardTextActor3D
     from eyeglow_egobody.rendering.viewport import Viewport
     from eyeglow_egobody.model.recording import synthetic_recording
     recording = synthetic_recording()
     from eyeglow_egobody.rendering.materials import eye_sphere_source
-    viewport = SimpleNamespace(recording=recording, optical_settings=dict(eye_relief_mm=13),
+    viewport = SimpleNamespace(recording=recording, optical_settings=dict(
+                               eye_relief_mm=13,
+                               subject_a_label='A: <CURRENT_ACTIVITY>',
+                               subject_b_label='B: <CURRENT_ACTIVITY>'),
                                parts=[], eye_parts=[], stable_actors=[], participant_actors=[],
                                optics=SimpleNamespace(update=lambda *args, **kwargs: None), current_visibility=None,
                                show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
@@ -141,6 +144,7 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
                                caption=SimpleNamespace(SetText=lambda *args: None))
     for p in range(2):
         actors = [vtkActor() for _ in range(5)]
+        actors[2] = vtkBillboardTextActor3D()
         viewport.participant_actors.append(actors)
         viewport.stable_actors.extend(actors)
         viewport.parts.append((pv.PolyData(np.zeros((16,3))),pv.PolyData(np.zeros((GLASSES_POINT_COUNT,3))),
@@ -149,7 +153,10 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
                                    ((pv.PolyData(np.zeros((1,3))), actors[3]),
                                     (pv.PolyData(np.zeros((1,3))), actors[4]))))
     actors = tuple(viewport.stable_actors)
+    viewport.activity_labels = ('talk', 'listen')
     Viewport.set_frame(viewport, 120, .35)
+    assert viewport.parts[0][2].GetInput() == 'A: talk'
+    assert viewport.parts[1][2].GetInput() == 'B: listen'
     for p in range(2):
         eyes, eye_parts = viewport.eye_parts[p]
         np.testing.assert_allclose(eyes.points, recording.eyes[p,120])
@@ -271,6 +278,8 @@ def test_smartglasses_and_visualization_controls_persist(qt_app, store):
     assert mode.currentText() == 'Mono right'
     assert isinstance(dialog.fields['eye_glow_color'], QPushButton)
     assert isinstance(dialog.fields['subject_a_label_visible'], QCheckBox)
+    assert dialog.fields['subject_a_label'].text() == 'A: <CURRENT_ACTIVITY>'
+    assert dialog.fields['subject_b_label'].text() == 'B: <CURRENT_ACTIVITY>'
     mode.setCurrentIndex(mode.findData('binocular'))
     dialog.editor._set_color_button(dialog.fields['eye_glow_color'], '#123456')
     dialog.fields['subject_a_label'].setText('Lead')
@@ -281,3 +290,7 @@ def test_smartglasses_and_visualization_controls_persist(qt_app, store):
     assert values['eye_glow_color'] == '#123456'
     assert values['subject_a_label'] == 'Lead'
     assert values['subject_a_label_visible'] is False
+    assert store.specs['subject_a_label_visible']['factory_default'] is True
+    assert store.specs['subject_b_label_visible']['factory_default'] is True
+    assert store.specs['subject_a_label']['factory_default'] == 'A: <CURRENT_ACTIVITY>'
+    assert store.specs['subject_b_label']['factory_default'] == 'B: <CURRENT_ACTIVITY>'

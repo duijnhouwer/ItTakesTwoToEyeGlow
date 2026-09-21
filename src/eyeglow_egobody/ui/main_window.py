@@ -6,15 +6,14 @@ import numpy as np
 from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
-                               QMessageBox,QDialog,QStyle,QTextEdit,QDockWidget,
-                               QToolButton,QFileDialog,QProgressBar)
+                               QMessageBox,QDialog,QStyle,QDockWidget,QToolButton,
+                               QFileDialog,QProgressBar,QMenu,QSizePolicy)
 from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.runtime_paths import default_models
 from eyeglow_egobody.controller import Controller
 from eyeglow_egobody.model.panel_settings import PanelSettings
 from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
-from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
 from eyeglow_egobody.ui.file_dialogs import paused_animation, save_file
 from eyeglow_egobody.model.playlist import ActivitiesPlaylist, PLAYLIST_KEYS
@@ -65,11 +64,12 @@ class MainWindow(QMainWindow):
                                np.tile(np.eye(4),(2,1,1,1)), name='No recording loaded',
                                valid=np.zeros((2,1),dtype=bool)) if dataset else synthetic_recording())
         self.viewport = Viewport(root,recording)
-        self.viewport.optical_settings = self.panel_settings.values
-        self.viewport.show_ui_lines = False
-        self.viewport.set_frame(0,.10)
+        initial_settings = self.panel_settings.values
+        self.viewport.optical_settings = initial_settings
+        self.viewport.set_frame(0, initial_settings['frustum_opacity'])
         layout.addWidget(self.viewport.interactor,1)
         self.controller = Controller(recording,self.viewport,output_root,self)
+        self.controller.frustum_opacity = initial_settings['frustum_opacity']
         self.playlist_analysis = PlaylistAnalysis(self.controller, self)
 
         def button(label, callback, row=None, tooltip=None):
@@ -87,7 +87,12 @@ class MainWindow(QMainWindow):
         panel_buttons.setContentsMargins(8,6,8,6)
         self.smartglasses_toggle = button('◀ Smartglasses', lambda: self._toggle_dock(self.smartglasses_dock))
         self.visualization_toggle = button('Visualization ▼', lambda: self._toggle_dock(self.visualization_dock))
-        self.recordings_toggle = button('Recordings ▶', lambda: self._toggle_dock(self.recordings_dock))
+        self.recordings_toggle = button(
+            'Playlist and analysis ▶',
+            lambda: self._toggle_dock(self.recordings_dock))
+        for toggle in (self.smartglasses_toggle, self.visualization_toggle,
+                       self.recordings_toggle):
+            toggle.setCheckable(True)
         panel_buttons.addWidget(self.smartglasses_toggle)
         panel_buttons.addStretch(1)
         panel_buttons.addWidget(self.visualization_toggle)
@@ -131,55 +136,44 @@ class MainWindow(QMainWindow):
         self.viewport.interactor.setToolTip(
             'Orbit (upright): drag · Pan: Shift + drag · Zoom: scroll')
         camera.addStretch()
+        actions = QHBoxLayout()
+        controls_layout.addLayout(actions)
         self.display_settings_button = QToolButton()
         self.display_settings_button.setText('⚙ Viewport settings...')
         self.display_settings_button.setToolTip('Display settings')
         self.display_settings_button.setAccessibleName('Display settings')
-        camera.addWidget(self.display_settings_button)
+        actions.addWidget(self.display_settings_button)
+        self.screenshot_button = button(
+            'Export screenshot…', lambda:self.choose_export(False), actions)
+        self.video_button = button(
+            'Export video…', lambda:self.choose_export(True), actions)
+        for action_button in (self.display_settings_button, self.screenshot_button,
+                              self.video_button):
+            action_button.setSizePolicy(
+                QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        actions.addStretch(1)
         self.display_settings_dialog = QDialog(self)
         self.display_settings_dialog.setWindowTitle('Viewport settings')
         self.display_settings_dialog.setModal(False)
-        self.display_settings_dialog.resize(620,520)
+        self.display_settings_dialog.setFixedWidth(round(620 * .70))
         display_settings_layout = QVBoxLayout(self.display_settings_dialog)
-        optical = QHBoxLayout()
-        display_settings_layout.addLayout(optical)
-        for title, attribute, checked in (('Frustums','show_frustums',True),
-                                         ('UI lines','show_ui_lines',False),
-                                         ('Local axes','show_axes',False)):
-            checkbox = QCheckBox(title)
-            checkbox.setChecked(checked)
-            checkbox.toggled.connect(lambda value, key=attribute: self.set_optical_visibility(key,value))
-            setattr(self, attribute, checkbox)
-            optical.addWidget(checkbox)
-        optical.addWidget(QLabel('Frustum opacity'))
-        self.frustum_opacity = QDoubleSpinBox()
-        self.frustum_opacity.setRange(0,1)
-        self.frustum_opacity.setSingleStep(.05)
-        self.frustum_opacity.setValue(.10)
-        self.frustum_opacity.valueChanged.connect(self.controller.set_frustum_opacity)
-        optical.addWidget(self.frustum_opacity)
-        optical.addStretch()
         self.display_settings_editor = SettingsEditor(
             self.panel_settings, ('visualization',), self.display_settings_dialog,
-            save_user_defaults=self._save_user_defaults)
+            save_user_defaults=self._save_user_defaults,
+            flat_groups=('visualization',), scrollable=False)
         self.display_settings_editor.saved.connect(self._apply_panel_settings)
+        self.frustum_opacity = self.display_settings_editor.fields['frustum_opacity']
         display_settings_layout.addWidget(self.display_settings_editor)
         self.display_settings_button.clicked.connect(self.show_display_settings)
-        eye_test_row = QHBoxLayout()
-        eye_test_row.addStretch(1)
-        self.eye_test_button = button('Eye-test details...',self.show_eye_test_details,eye_test_row)
-        controls_layout.addLayout(eye_test_row)
-        self.visibility_dialog = QDialog(self)
-        self.visibility_dialog.setWindowTitle('Current-frame eye tests')
-        self.visibility_dialog.resize(520,560)
-        visibility_layout = QVBoxLayout(self.visibility_dialog)
-        self.visibility_text = QTextEdit()
-        self.visibility_text.setReadOnly(True)
-        self.visibility_text.setMinimumWidth(320)
-        visibility_layout.addWidget(self.visibility_text)
-        self.visibility_label = QLabel()
-        self.visibility_label.setWordWrap(True)
-        controls_layout.addWidget(self.visibility_label)
+        self.viewport_context_menu = QMenu(self.viewport.interactor)
+        self.viewport_settings_action = self.viewport_context_menu.addAction(
+            'Viewport settings...')
+        self.viewport_settings_action.triggered.connect(self.show_display_settings)
+        self.viewport.interactor.setContextMenuPolicy(
+            Qt.ContextMenuPolicy.CustomContextMenu)
+        self.viewport.interactor.customContextMenuRequested.connect(
+            lambda position: self.viewport_context_menu.exec(
+                self.viewport.interactor.mapToGlobal(position)))
         row = QHBoxLayout()
         controls_layout.addLayout(row)
         self.jump_start = button('',lambda:self.controller.seek(0),row,'Jump to Start')
@@ -223,6 +217,7 @@ class MainWindow(QMainWindow):
         recordings_panel = QWidget()
         recordings_panel.setMinimumWidth(280)
         recordings_layout = QVBoxLayout(recordings_panel)
+        self.models_button = button('Select input data ...', self.select_input_data, recordings_layout)
         self.activity_button = button('Edit activities playlist ...', self.edit_activities_playlist, recordings_layout)
         self.playlist_summary = QLabel('No activities playlist selected.')
         self.playlist_summary.setWordWrap(True)
@@ -238,9 +233,6 @@ class MainWindow(QMainWindow):
         self.cancel_analysis_button = button('Cancel analysis', self.playlist_analysis.cancel, recordings_layout)
         self.cancel_analysis_button.hide()
         self.playlist_analysis.changed.connect(self.sync_analysis)
-        self.models_button = button('Select input data ...', self.select_input_data, recordings_layout)
-        self.screenshot_button = button('Export screenshot…', lambda:self.choose_export(False), recordings_layout)
-        self.video_button = button('Export video…', lambda:self.choose_export(True), recordings_layout)
         recordings_layout.addStretch(1)
         self.cancel = QPushButton('Cancel export')
         self.cancel.clicked.connect(self.controller.cancel_export)
@@ -282,6 +274,9 @@ class MainWindow(QMainWindow):
         dock = QDockWidget(title,self)
         dock.setObjectName(object_name)
         dock.setWidget(widget)
+        title_bar = QWidget(dock)
+        title_bar.setFixedHeight(0)
+        dock.setTitleBarWidget(title_bar)
         dock.setAllowedAreas(area)
         dock.setFeatures(QDockWidget.DockWidgetFeature.NoDockWidgetFeatures)
         self.addDockWidget(area,dock)
@@ -292,16 +287,22 @@ class MainWindow(QMainWindow):
         self._sync_panel_buttons()
 
     def _sync_panel_buttons(self, *_):
+        self.smartglasses_toggle.setChecked(not self.smartglasses_dock.isHidden())
+        self.visualization_toggle.setChecked(not self.visualization_dock.isHidden())
+        self.recordings_toggle.setChecked(not self.recordings_dock.isHidden())
         self.smartglasses_toggle.setText(
             ('▶' if not self.smartglasses_dock.isHidden() else '◀') + ' Smartglasses')
         self.visualization_toggle.setText(
             'Visualization ' + ('▲' if not self.visualization_dock.isHidden() else '▼'))
         self.recordings_toggle.setText(
-            'Recordings ' + ('◀' if not self.recordings_dock.isHidden() else '▶'))
+            'Playlist and analysis '
+            + ('◀' if not self.recordings_dock.isHidden() else '▶'))
 
     def _apply_panel_settings(self):
+        values = self.panel_settings.values
         self.controller.optical_parameters = self.panel_settings.optical_parameters
-        self.viewport.optical_settings = self.panel_settings.values
+        self.viewport.optical_settings = values
+        self.controller.frustum_opacity = values['frustum_opacity']
         self.controller.refresh()
         self.statusBar().showMessage('Settings updated')
 
@@ -315,12 +316,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage('Saved as new defaults')
         return True
 
-    def show_eye_test_details(self):
-        self.visibility_dialog.show()
-        self.visibility_dialog.raise_()
-        self.visibility_dialog.activateWindow()
-
     def show_display_settings(self):
+        self.display_settings_dialog.adjustSize()
         self.display_settings_dialog.show()
         self.display_settings_dialog.raise_()
         self.display_settings_dialog.activateWindow()
@@ -328,10 +325,6 @@ class MainWindow(QMainWindow):
     def inspect_participant(self, participant):
         self.orbit.setChecked(False)
         self.viewport.inspect_participant(participant,self.controller.source_frame)
-
-    def set_optical_visibility(self, key, visible):
-        setattr(self.viewport,key,visible)
-        self.controller.refresh()
 
     @suspend_animation
     def show_settings(self):
@@ -440,8 +433,9 @@ class MainWindow(QMainWindow):
         destination, settings = None, None
         try:
             if video:
+                timeline = controller.playlist or controller.recording
                 dialog = VideoExportDialog(
-                    controller.recording, self.viewport.capture_size(),
+                    timeline, self.viewport.capture_size(),
                     controller.export_start, controller.export_end, self)
                 if dialog.exec() == QDialog.DialogCode.Accepted:
                     destination, settings = dialog.destination, dialog.settings
@@ -460,13 +454,6 @@ class MainWindow(QMainWindow):
                 controller.save_screenshot(destination, overwrite=True)
 
     def sync(self):
-        result = self.controller.current_visibility
-        self.visibility_label.setText(visibility_summary(result))
-        details = visibility_details(result,self.controller.optical_parameters)
-        if details != self.visibility_text.toPlainText():
-            scroll = self.visibility_text.verticalScrollBar().value()
-            self.visibility_text.setPlainText(details)
-            self.visibility_text.verticalScrollBar().setValue(scroll)
         state = self.controller.state
         with QSignalBlocker(self.slider):
             self.slider.setRange(0,state.frame_count-1)
@@ -503,7 +490,7 @@ class MainWindow(QMainWindow):
         self.play.setEnabled(not locked and not loading and usable)
         self.smartglasses_panel.setEnabled(not locked)
         self.screenshot_button.setEnabled(not locked and not loading and usable)
-        self.video_button.setEnabled(not locked and not loading and usable and playlist is None)
+        self.video_button.setEnabled(not locked and not loading and usable)
         self.viewport.setEnabled(not busy)
         self.cancel.setVisible(busy)
 
@@ -512,7 +499,6 @@ class MainWindow(QMainWindow):
         self.controller.close()
         self.viewport.close()
         self.display_settings_dialog.close()
-        self.visibility_dialog.close()
         if self.settings_session is not None:
             try:
                 self.settings_session.clean_close()

@@ -9,6 +9,7 @@ from eyeglow_egobody.analysis.activities import ActivityCatalog
 from eyeglow_egobody.model.playlist import ActivitiesPlaylist
 from eyeglow_egobody.model.recording import synthetic_recording
 from eyeglow_egobody.model.panel_settings import PanelSettings
+from eyeglow_egobody.model.export_settings import VideoSettings
 from eyeglow_egobody.controller import Controller
 from eyeglow_egobody.analysis import batch
 from eyeglow_egobody.ui.playlist_analysis import PlaylistAnalysis
@@ -78,6 +79,63 @@ def test_lazy_playback_scrub_cross_recording_resume_and_empty(qt_app, tmp_path, 
         assert not c.state.playing and c.playlist.frame_count == 0
     finally:
         c.close()
+
+
+def test_video_export_concatenates_selected_clips(qt_app, tmp_path, playlist_data,
+                                                   monkeypatch):
+    from imageio_ffmpeg import count_frames_and_secs
+    from eyeglow_egobody.egobody import loading
+    _, _, recordings, playlist = playlist_data
+
+    class ExportViewport:
+        def __init__(self, recording):
+            self.recording = recording
+            self.rendered = []
+
+        def set_recording(self, recording):
+            self.recording = recording
+
+        def set_frame(self, frame, _opacity):
+            self.frame = frame
+            self.rendered.append((self.recording.name, frame))
+
+        def capture_size(self):
+            return (16, 16)
+
+        def capture(self, size=None):
+            width, height = size or self.capture_size()
+            return np.full((height, width, 3), self.frame, dtype=np.uint8)
+
+    monkeypatch.setattr(
+        loading, 'load_recording', lambda info, *_args, **_kwargs: recordings[info.name])
+    viewport = ExportViewport(recordings['r1'])
+    controller = Controller(recordings['r1'], viewport, tmp_path)
+    controller.timer.stop()
+    try:
+        controller.set_playlist(playlist, tmp_path)
+        assert (controller.export_start, controller.export_end) == (0, 7)
+        viewport.rendered.clear()
+        destination = tmp_path/'playlist.mp4'
+        controller.export_video(
+            destination, settings=VideoSettings((16, 16), playlist.fps, 90))
+        for _ in range(100):
+            if controller.job is None:
+                break
+            for key in ('load_future', 'future'):
+                future = controller.job[key]
+                if future is not None:
+                    future.result(timeout=15)
+            controller._export_tick()
+        assert controller.job is None
+        assert viewport.rendered[:8] == [
+            ('r1', 0), ('r1', 1), ('r1', 2), ('r1', 6), ('r1', 7),
+            ('r2', 1), ('r2', 2), ('r2', 3),
+        ]
+        assert count_frames_and_secs(str(destination))[0] == 8
+        assert controller.recording is recordings['r1']
+        assert controller.state.frame == 0
+    finally:
+        controller.close()
 
 
 def test_chunked_analysis_matches_export_and_preview_timeline(tmp_path, playlist_data, monkeypatch):

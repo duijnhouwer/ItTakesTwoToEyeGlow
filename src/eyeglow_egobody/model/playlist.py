@@ -14,6 +14,7 @@ class PlaylistClip:
 
 class ActivitiesPlaylist:
     fps = 30.
+    name = 'activities_playlist'
 
     def __init__(self, infos, catalog, selections):
         self.selections = tuple(tuple(sorted(s)) for s in selections)

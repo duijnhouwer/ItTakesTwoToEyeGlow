@@ -53,7 +53,6 @@ def check_optical_rendering(window):
                     assert bool(part.actors[1].GetVisibility()) == changed.active_eyes[eye]
             assert tuple(window.viewport.stable_actors) == actors
             assert window.controller.current_visibility is window.viewport.current_visibility
-            assert 'containment' in window.visibility_text.toPlainText()
     finally:
         controller.optical_parameters = original
         controller.refresh()
@@ -155,8 +154,6 @@ def start_smoke(app,window,output):
                 window.grab().save(str(output/'window.png'))
                 controller.seek(0)
                 window.frustum_opacity.setValue(.10)
-                window.show_axes.setChecked(True)
-                window.show_eye_test_details()
                 window.inspect_participant(0)
                 app.processEvents()
                 window.viewport.render()

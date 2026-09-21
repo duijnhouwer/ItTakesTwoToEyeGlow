@@ -1,6 +1,7 @@
 from pathlib import Path
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QWidget, QFileDialog, QDialog, QMessageBox
+from PySide6.QtWidgets import (QWidget, QFileDialog, QDialog, QMessageBox,
+                               QSizePolicy, QGroupBox)
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, default_filename, choose_file
 from eyeglow_egobody.model.recording import synthetic_recording
 
@@ -99,27 +100,57 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert not hasattr(window, 'diagnostics_button')
         assert [window.smartglasses_dock.isHidden(), window.visualization_dock.isHidden(),
                 window.recordings_dock.isHidden()] == [True, True, True]
+        for dock in (window.smartglasses_dock, window.visualization_dock,
+                     window.recordings_dock):
+            assert dock.titleBarWidget() is not None
+            assert dock.titleBarWidget().height() == 0
         assert window.smartglasses_toggle.text() == '◀ Smartglasses'
         assert window.visualization_toggle.text() == 'Visualization ▼'
-        assert window.recordings_toggle.text() == 'Recordings ▶'
+        assert window.recordings_toggle.text() == 'Playlist and analysis ▶'
+        assert not window.smartglasses_toggle.isChecked()
+        assert not window.visualization_toggle.isChecked()
+        assert not window.recordings_toggle.isChecked()
         window.smartglasses_toggle.click()
         window.visualization_toggle.click()
         window.recordings_toggle.click()
         assert window.smartglasses_toggle.text() == '▶ Smartglasses'
         assert window.visualization_toggle.text() == 'Visualization ▲'
-        assert window.recordings_toggle.text() == 'Recordings ◀'
+        assert window.recordings_toggle.text() == 'Playlist and analysis ◀'
+        assert window.smartglasses_toggle.isChecked()
+        assert window.visualization_toggle.isChecked()
+        assert window.recordings_toggle.isChecked()
         assert set(window.smartglasses_panel.groups) == {'smartglasses','receiver_fov'}
         assert set(window.display_settings_editor.groups) == {'visualization'}
-        assert not window.show_ui_lines.isChecked()
-        assert window.viewport.show_ui_lines is False
+        assert window.display_settings_editor.findChild(QGroupBox, 'visualization') is None
+        assert not hasattr(window, 'show_frustums')
+        assert not hasattr(window, 'show_ui_lines')
+        assert not hasattr(window, 'show_axes')
+        assert window.frustum_opacity.value() == .10
+        assert 'subject_a_activity_visible' not in window.display_settings_editor.fields
+        assert 'subject_b_activity_visible' not in window.display_settings_editor.fields
+        assert window.display_settings_dialog.width() == round(620 * .70)
         assert window.display_settings_button.text() == '⚙ Viewport settings...'
         assert window.display_settings_button.toolTip() == 'Display settings'
+        assert window.display_settings_button.parent() is window.controls
+        assert window.screenshot_button.parent() is window.controls
+        assert window.video_button.parent() is window.controls
+        assert (window.display_settings_button.sizePolicy().horizontalPolicy()
+                == window.screenshot_button.sizePolicy().horizontalPolicy()
+                == window.video_button.sizePolicy().horizontalPolicy()
+                == QSizePolicy.Policy.Fixed)
+        assert (window.viewport.contextMenuPolicy()
+                == Qt.ContextMenuPolicy.CustomContextMenu)
+        assert window.viewport_settings_action.text() == 'Viewport settings...'
         window.display_settings_button.click()
         assert not window.display_settings_dialog.isHidden()
         assert not window.display_settings_dialog.isModal()
-        assert window.eye_test_button.text() == 'Eye-test details...'
-        window.show_eye_test_details()
-        assert not window.visibility_dialog.isHidden()
+        assert window.display_settings_dialog.height() < 520
+        window.display_settings_dialog.hide()
+        window.viewport_settings_action.trigger()
+        assert not window.display_settings_dialog.isHidden()
+        assert not hasattr(window, 'eye_test_button')
+        assert not hasattr(window, 'visibility_label')
+        assert not hasattr(window, 'visibility_dialog')
         assert window.corner(Qt.Corner.TopLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
         assert window.corner(Qt.Corner.BottomLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
         assert window.corner(Qt.Corner.TopRightCorner) == Qt.DockWidgetArea.RightDockWidgetArea
@@ -139,8 +170,8 @@ def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
         assert not window.menuBar().actions()
         assert window.screenshot_button.text() == 'Export screenshot…'
         assert window.video_button.text() == 'Export video…'
-        assert window.screenshot_button.parent() is window.recordings_panel
-        assert window.video_button.parent() is window.recordings_panel
+        assert window.screenshot_button.parent() is window.controls
+        assert window.video_button.parent() is window.controls
         controller.state.playing = True
         sizes = []
         def reject(dialog):
