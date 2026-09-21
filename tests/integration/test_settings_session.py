@@ -110,3 +110,18 @@ def test_invalid_recovered_current_cannot_be_restored_and_cancel_preserves_it(pa
         recovered.restore_recovered_settings()
     # This is the state the UI leaves behind when Cancel is selected.
     assert recovered.current_path.exists()
+
+
+def test_new_playlist_fields_do_not_reset_existing_optical_settings(paths):
+    active = session(paths)
+    active.save_user_defaults({'eye_relief_mm': 19})
+    active.current.save({**active.current.values, 'eye_relief_mm': 23})
+    for path in (active.user_default_path, active.current_path):
+        document = json.loads(path.read_text())
+        del document['settings']['activities_playlist']
+        path.chmod(0o644)
+        path.write_text(json.dumps(document))
+    restored = session(paths)
+    assert restored.restore_recovered_settings().values['eye_relief_mm'] == 23
+    assert restored.current.values['playlist_actions_a'] == []
+    assert PanelSettings(restored.user_default_path, paths[0]).values['eye_relief_mm'] == 19

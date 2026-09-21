@@ -1,6 +1,21 @@
 {
   "schema_version": 1,
   "settings": {
+    "input_data": {
+      "egobody_data_path": {"display_name": "EgoBody data folder", "kind": "text", "value": "", "default": "", "factory_default": ""},
+      "smplx_female_template_path": {"display_name": "SMPLX_FEMALE_TEMPLATE", "kind": "text", "value": "", "default": "", "factory_default": ""},
+      "smplx_male_template_path": {"display_name": "SMPLX_MALE_TEMPLATE", "kind": "text", "value": "", "default": "", "factory_default": ""}
+    },
+    "activities_playlist": {
+      "playlist_actions_a": {
+        "display_name": "A — wearer actions", "kind": "string_list",
+        "value": [], "default": [], "factory_default": []
+      },
+      "playlist_actions_b": {
+        "display_name": "B — interactee actions", "kind": "string_list",
+        "value": [], "default": [], "factory_default": []
+      }
+    },
     "smartglasses": {
       "eye_relief_mm": {
         "display_name": "Eye relief (mm)",

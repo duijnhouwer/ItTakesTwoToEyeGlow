@@ -160,16 +160,32 @@ with no Phong highlights or shadows. Placeholder lens rear planes
 sit radius + relief in front of those centers along the head's forward direction
 (25 mm by default). Eye centers come from fitted anatomy, not measured gaze.
 
-### Activity Analysis
+### Activities playlist
 
-Open **Recordings → Activity Analysis…** to select actions independently for
-A (camera wearer) and B (interactee). Search either checklist and use Select all
-or Clear across the full list. Select at least one action on each side; a time
-interval matches when both participants have a selected action. `<undefined>`
-selects unannotated time. All discovered recordings form one population.
+Open **Recordings → Edit activities playlist ...** to select actions independently
+for A (camera wearer) and B (interactee). Search either checklist and use Select
+all or Clear across the full list. Both participants must match; `<undefined>`
+selects unannotated time. The editor shows the matching paired clip count and
+combined duration across all recordings. Selections are written immediately to
+`settings_current.json` and remain active after closing the editor. **Save as new
+defaults** promotes only the playlist choices to `settings_user_default.json`;
+**Factory Reset** reads the playlist values from `settings_factory_default.json`
+(currently neither participant has actions selected).
 
-**Analyze and save JSONL…** asks for a destination, snapshots the complete current
-settings document, and processes matching motion in the background. The first
+Play traverses the selected clips in recording-name/source-frame order, skipping
+unselected time. The scrubber represents their combined duration. Recordings load
+as needed; playback pauses while loading and resumes at the requested clip. An
+empty playlist disables playback and analysis. Loading an individual recording
+explicitly switches playback to that recording without discarding saved playlist
+choices. Video export is available in individual-recording mode.
+
+**Recordings → Analyze activities playlist ...** asks for a JSONL destination,
+snapshots the complete current settings document, and processes the playlist in
+the background. The viewport previews the latest analyzed frame at approximately
+30 updates per second; computation runs at full speed, so displayed frames may be
+skipped. Editing and playback are locked during analysis; Cancel analysis remains
+available. Analysis completion leaves the viewport at the latest preview frame.
+The first
 JSONL record contains configuration and selection metadata. Each following record
 describes one paired annotation interval, its original source annotations, and
 duration-weighted potential visibility of A seeing B’s eye glow and vice versa.

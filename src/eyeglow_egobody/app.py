@@ -3,7 +3,7 @@ import argparse
 import os
 from pathlib import Path
 import sys
-from eyeglow_egobody.runtime_paths import project_root, default_dataset
+from eyeglow_egobody.runtime_paths import project_root, default_dataset, default_models
 
 
 def main():
@@ -45,8 +45,15 @@ def main():
             settings_session.use_user_defaults()
         elif not _choose_recovered_settings(settings_session, QMessageBox):
             return 0
-    window = MainWindow(output, dataset=None if args.synthetic or args.smoke_test else args.dataset,
-                        model_dir=args.model_dir, settings_session=settings_session)
+    saved = settings_session.current.values
+    template_root = default_models()
+    dataset = Path(saved['egobody_data_path'] or args.dataset)
+    models = {'female': Path(saved['smplx_female_template_path'] or template_root/'SMPLX_FEMALE.npz'),
+              'male': Path(saved['smplx_male_template_path'] or template_root/'SMPLX_MALE.npz')}
+    if args.model_dir:
+        models = {'female': args.model_dir/'SMPLX_FEMALE.npz', 'male': args.model_dir/'SMPLX_MALE.npz'}
+    window = MainWindow(output, dataset=None if args.synthetic or args.smoke_test else dataset,
+                        model_dir=models, settings_session=settings_session)
     window.show()
     if args.smoke_test:
         from eyeglow_egobody.smoke import start_smoke

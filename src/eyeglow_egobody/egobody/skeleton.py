@@ -32,9 +32,10 @@ def rotations(vectors):
 def model_path(folder, gender):
     if gender not in ('male', 'female', 'neutral'):
         raise ValueError(f'Unsupported model gender: {gender}')
-    path = Path(folder) / f'SMPLX_{gender.upper()}.npz'
+    path = (Path(folder[gender]) if isinstance(folder, dict)
+            else Path(folder) / f'SMPLX_{gender.upper()}.npz')
     if not path.is_file():
-        raise FileNotFoundError(f'Required model missing: {path}. Supply licensed SMPL-X NPZ models with --model-dir or Choose models.')
+        raise FileNotFoundError(f'Required model missing: {path}. Select the licensed SMPL-X template files in Select input data ...')
     return path
 
 

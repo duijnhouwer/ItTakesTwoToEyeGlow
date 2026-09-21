@@ -35,6 +35,10 @@ def user_settings_directory():
 
 def validate_value(spec, value):
     kind = spec.get('kind')
+    if kind == 'string_list':
+        if not isinstance(value, list) or not all(isinstance(v, str) and v for v in value):
+            raise ValueError('choose a list of actions')
+        return sorted(set(value))
     if kind == 'color':
         if not isinstance(value, str) or not re.fullmatch(r'#[0-9a-fA-F]{6}', value):
             raise ValueError('choose a valid color')
@@ -75,6 +79,8 @@ def setting_specs(document):
 
 
 def format_value(spec, value):
+    if spec.get('kind') == 'string_list':
+        return json.dumps(value)
     return str(value) if 'choices' in spec or spec.get('kind') in {'color', 'text'} else f"{value:.{spec['precision']}f}"
 
 
@@ -107,7 +113,7 @@ def _validate_schema(document):
     if 'eye_relief_mm' not in specs:
         raise ValueError('Eye relief setting is missing')
     for key, spec in specs.items():
-        if isinstance(spec, dict) and spec.get('kind') in {'color', 'text', 'boolean'}:
+        if isinstance(spec, dict) and spec.get('kind') in {'color', 'text', 'boolean', 'string_list'}:
             if not isinstance(spec.get('display_name'), str) or not spec['display_name']:
                 raise ValueError(f'Invalid setting definition: {key}')
             for field in ('value', 'default', 'factory_default'):
@@ -214,6 +220,10 @@ class SettingsSession:
         self.current_path = self.user_directory / CURRENT_FILENAME
         self.legacy_path = Path(legacy_path) if legacy_path is not None else settings_path()
         self.factory = PanelSettings(self.factory_path)
+        # Initialize newly introduced state without discarding the
+        # user's unrelated optical/display settings in an existing document.
+        self._initialize_new_groups(self.user_default_path)
+        self._initialize_new_groups(self.current_path, read_only=True)
         self._ensure_user_default()
         self.recovery_error = None
         self.recovery_pending = self.current_path.exists()
@@ -225,6 +235,24 @@ class SettingsSession:
                 self.recovery_error = str(exc)
         else:
             self.use_user_defaults()
+
+    def _initialize_new_groups(self, path, read_only=False):
+        if not path.exists():
+            return
+        try:
+            document = _read_document(path)
+            _validate_schema(document)
+        except (OSError, ValueError, KeyError, TypeError):
+            return  # The normal settings validation/recovery flow handles it.
+        missing = [name for name in self.factory.document['settings'] if name not in document['settings']]
+        if missing:
+            for name in missing:
+                document['settings'][name] = deepcopy(self.factory.document['settings'][name])
+            if read_only:
+                path.chmod(0o644)
+            _atomic_write(path, document)
+            if read_only:
+                path.chmod(0o444)
 
     def _ensure_user_default(self):
         if self.user_default_path.exists():

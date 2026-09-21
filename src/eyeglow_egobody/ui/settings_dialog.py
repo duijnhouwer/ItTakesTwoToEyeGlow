@@ -1,4 +1,5 @@
 """Editable values generated from the settings JSON definitions."""
+import json
 from PySide6.QtCore import Qt, Signal, QSignalBlocker
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLineEdit, QLabel,
@@ -73,7 +74,7 @@ class SettingsEditor(QWidget):
                 field = self._make_field(name, spec, spec['value'])
                 field.setObjectName(name)
                 field.setAccessibleName(spec['display_name'])
-                if 'choices' not in spec and spec.get('kind') not in {'color', 'text', 'boolean'}:
+                if 'choices' not in spec and spec.get('kind') not in {'color', 'text', 'boolean', 'string_list'}:
                     field.setToolTip(f"Range: {spec['min']} to {spec['max']}")
                 self.fields[name] = field
                 visible_name = f'{name}_visible'
@@ -172,6 +173,8 @@ class SettingsEditor(QWidget):
 
     @staticmethod
     def _field_value(field, spec):
+        if spec.get('kind') == 'string_list':
+            return json.loads(field.text())
         if 'choices' in spec:
             return field.currentData()
         if spec.get('kind') == 'boolean':

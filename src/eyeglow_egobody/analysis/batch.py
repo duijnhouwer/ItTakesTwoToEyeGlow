@@ -6,13 +6,14 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 import tempfile
 import numpy as np
 from eyeglow_egobody.egobody.loading import load_recording
 from eyeglow_egobody.export.paths import safe_destination
 from eyeglow_egobody.model.parameters import OpticalParameters
 from eyeglow_egobody.model.panel_settings import setting_specs
-from .visibility import analyze_recording
+from .visibility import analyze_recording, analyze_visibility
 
 
 def segment_result(info, segment, recording, result):
@@ -43,7 +44,7 @@ def segment_result(info, segment, recording, result):
 
 
 def run_batch(infos, catalog, selections, settings, model_dir, destination,
-              cancelled, progress=lambda current, total: None, overwrite=False):
+              cancelled, progress=lambda current, total: None, overwrite=False, preview=None):
     settings = deepcopy(settings)
     selections = tuple(tuple(sorted(s)) for s in selections)
     if not all(selections):
@@ -55,7 +56,7 @@ def run_batch(infos, catalog, selections, settings, model_dir, destination,
     for info in infos:
         if destination.is_relative_to(info.root.resolve()):
             raise ValueError('The dataset is read-only.')
-    jobs = [(info, tuple(catalog.segments(info, selections))) for info in infos]
+    jobs = [(info, tuple(catalog.segments(info, selections))) for info in sorted(infos, key=lambda i: i.name)]
     jobs = [(info, segments) for info, segments in jobs if segments]
     if not jobs:
         raise ValueError('No time matches both action selections.')
@@ -84,11 +85,28 @@ def run_batch(infos, catalog, selections, settings, model_dir, destination,
                 stream.write(json.dumps(record, ensure_ascii=False, allow_nan=False) + '\n')
             write(metadata)
             progress(0, len(jobs))
+            playlist_offset = 0
             for index, (info, segments) in enumerate(jobs):
                 check()
                 recording = load_recording(info, model_dir, cancelled=cancelled)
                 check()
-                result = analyze_recording(recording, parameters)
+                if preview is None:
+                    result = analyze_recording(recording, parameters)
+                else:
+                    # Small vectorized chunks allow cancellation and a live preview
+                    # without waiting for GUI rendering or accumulating frame events.
+                    states = np.full((2, recording.frame_count), -1, dtype=np.int8)
+                    for segment in segments:
+                        for start in range(segment.start, segment.end, 30):
+                            check()
+                            end = min(start+30, segment.end)
+                            lo, hi = start-info.start, end-info.start
+                            chunk = analyze_visibility(recording.heads[:,lo:hi], recording.eyes[:,lo:hi],
+                                                       recording.valid[:,lo:hi], parameters)
+                            states[:,lo:hi] = chunk.states
+                            preview(recording, playlist_offset + end-segment.start-1)
+                        playlist_offset += segment.end-segment.start
+                    result = SimpleNamespace(states=states)
                 for segment in segments:
                     check()
                     write(segment_result(info, segment, recording, result))

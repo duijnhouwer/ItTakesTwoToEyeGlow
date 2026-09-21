@@ -1,14 +1,9 @@
-"""Independent action selection and asynchronous batch export."""
-from concurrent.futures import CancelledError, ThreadPoolExecutor
-from copy import deepcopy
-from pathlib import Path
-from threading import Event
-from PySide6.QtCore import Qt, QTimer, Signal
+"""Persistent paired action selection; analysis belongs to the main window."""
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QPushButton, QWidget,
-                               QFileDialog, QMessageBox, QProgressBar)
-from eyeglow_egobody.analysis.batch import run_batch
-from eyeglow_egobody.ui.file_dialogs import save_file
+                               QDialogButtonBox)
+from eyeglow_egobody.model.playlist import ActivitiesPlaylist, PLAYLIST_KEYS
 
 
 class ActionList(QWidget):
@@ -43,127 +38,105 @@ class ActionList(QWidget):
             item = self.items.item(i)
             item.setHidden(text not in item.text().lower())
 
-    def select_all(self, checked):
+    def set_selected(self, labels):
         self.items.blockSignals(True)
         for i in range(self.items.count()):
-            self.items.item(i).setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            item = self.items.item(i)
+            item.setCheckState(Qt.CheckState.Checked if item.text() in labels else Qt.CheckState.Unchecked)
         self.items.blockSignals(False)
+
+    def select_all(self, checked):
+        self.set_selected([self.items.item(i).text() for i in range(self.items.count())] if checked else [])
         self.changed.emit()
 
     def selected(self):
-        return tuple(self.items.item(i).text() for i in range(self.items.count())
-                     if self.items.item(i).checkState() == Qt.CheckState.Checked)
+        return [self.items.item(i).text() for i in range(self.items.count())
+                if self.items.item(i).checkState() == Qt.CheckState.Checked]
 
 
-class ActivityAnalysisDialog(QDialog):
-    progress_changed = Signal(int, int)
-
-    def __init__(self, infos, catalog, settings_provider, model_dir, parent=None):
+class ActivitiesPlaylistDialog(QDialog):
+    def __init__(self, infos, catalog, store, save_user_defaults=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle('Activity Analysis')
+        self.setWindowTitle('Edit activities playlist ...')
         self.resize(850, 600)
-        self.infos, self.catalog = tuple(infos), catalog
-        self.settings_provider, self.model_dir = settings_provider, model_dir
-        self.future = None
-        self.cancelled = Event()
-        self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='activity-analysis')
+        self.infos, self.catalog, self.store = tuple(infos), catalog, store
+        self.save_user_defaults = save_user_defaults
+        self.save_failed = False
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel('Analyze time where both participants match their selected actions.'))
+        layout.addWidget(QLabel('Include clips where both participants match their selected actions.'))
         row = QHBoxLayout()
-        self.lists = tuple(ActionList(title, catalog.labels) for title in
+        values = store.values
+        labels = sorted(set(catalog.labels) | set(values[PLAYLIST_KEYS[0]]) | set(values[PLAYLIST_KEYS[1]]))
+        self.lists = tuple(ActionList(title, labels) for title in
                            ('A — wearer actions', 'B — interactee actions'))
-        for pane in self.lists:
+        for key, pane in zip(PLAYLIST_KEYS, self.lists):
             row.addWidget(pane)
-            pane.changed.connect(self.sync)
+            pane.set_selected(values[key])
+            pane.changed.connect(self.selection_changed)
         layout.addLayout(row)
-        self.status = QLabel('Select at least one action for each participant.')
+        self.summary = QLabel()
+        layout.addWidget(self.summary)
+        self.status = QLabel()
         self.status.setWordWrap(True)
         layout.addWidget(self.status)
-        self.progress = QProgressBar()
-        self.progress.hide()
-        layout.addWidget(self.progress)
         buttons = QHBoxLayout()
-        self.run = QPushButton('Analyze and save JSONL…')
-        self.run.clicked.connect(self.start)
-        buttons.addWidget(self.run)
-        self.cancel = QPushButton('Cancel batch')
-        self.cancel.clicked.connect(self.cancel_batch)
-        self.cancel.hide()
-        buttons.addWidget(self.cancel)
+        self.save_defaults = QPushButton('Save as new defaults')
+        # Use the same themed Save icon as the Smartglasses settings panel.
+        standard = QDialogButtonBox(QDialogButtonBox.StandardButton.Save)
+        self.save_defaults.setIcon(standard.button(QDialogButtonBox.StandardButton.Save).icon())
+        standard.deleteLater()
+        self.save_defaults.clicked.connect(self.save_as_defaults)
+        self.factory_reset = QPushButton('Factory Reset')
+        self.factory_reset.clicked.connect(self.reset_to_factory)
         close = QPushButton('Close')
         close.clicked.connect(self.reject)
-        buttons.addWidget(close)
+        for button in (self.save_defaults, self.factory_reset, close):
+            buttons.addWidget(button)
         layout.addLayout(buttons)
-        self.progress_changed.connect(self.update_progress)
-        self.timer = QTimer(self)
-        self.timer.setInterval(50)
-        self.timer.timeout.connect(self.poll)
-        self.sync()
+        self.update_summary()
 
-    def sync(self):
-        busy = self.future is not None
-        for pane in self.lists:
-            pane.setEnabled(not busy)
-        self.run.setEnabled(not busy and all(p.selected() for p in self.lists))
-        self.cancel.setVisible(busy)
+    def selections(self):
+        return tuple(p.selected() for p in self.lists)
 
-    def start(self):
-        if self.future is not None or not all(p.selected() for p in self.lists):
-            return
-        name, _ = save_file(self, 'Save activity analysis',
-                                             str(Path.home()/'activity-analysis.jsonl'),
-                                             'JSON Lines (*.jsonl)',
-                                             options=QFileDialog.Option.DontConfirmOverwrite)
-        if not name:
-            return
-        destination = Path(name)
-        if not destination.suffix:
-            destination = destination.with_suffix('.jsonl')
-        overwrite = destination.exists()
-        if overwrite and QMessageBox.question(self, 'Replace file?', f'Replace {destination.name}?') != QMessageBox.StandardButton.Yes:
-            return
-        settings = deepcopy(self.settings_provider())
-        selections = tuple(p.selected() for p in self.lists)
-        self.cancelled = Event()
-        self.progress.setRange(0, 0)
-        self.progress.show()
-        self.status.setText('Preparing activity analysis…')
-        self.future = self.pool.submit(run_batch, self.infos, self.catalog, selections,
-                                       settings, self.model_dir, destination, self.cancelled,
-                                       self.progress_changed.emit, overwrite)
-        self.timer.start()
-        self.sync()
+    def update_summary(self):
+        self.playlist = ActivitiesPlaylist(self.infos, self.catalog, self.selections())
+        self.summary.setText(self.playlist.summary)
 
-    def update_progress(self, current, total):
-        self.progress.setRange(0, total)
-        self.progress.setValue(current)
-        self.status.setText(f'Analyzing motion: {current} / {total}')
-
-    def cancel_batch(self):
-        self.cancelled.set()
-        self.status.setText('Cancelling…')
-
-    def poll(self):
-        if self.future is None or not self.future.done():
-            return
-        future, self.future = self.future, None
-        self.timer.stop()
+    def selection_changed(self):
+        self.update_summary()
+        values = self.store.values
+        values.update(dict(zip(PLAYLIST_KEYS, self.selections())))
         try:
-            destination = future.result()
-            self.status.setText(f'Saved {destination}')
-        except CancelledError:
-            self.status.setText('Batch cancelled. No output was published.')
-        except Exception as exc:
-            self.status.setText(f'Analysis failed: {exc}')
-        self.sync()
+            self.store.save(values)
+        except (OSError, ValueError) as exc:
+            self.save_failed = True
+            self.status.setText(f'Could not save selection: {exc}')
+            return False
+        self.save_failed = False
+        self.status.setText('Selection saved for this session.')
+        return True
+
+    def save_as_defaults(self):
+        if not self.selection_changed():
+            return
+        values = dict(zip(PLAYLIST_KEYS, self.selections()))
+        if self.save_user_defaults is not None and self.save_user_defaults(values) is False:
+            return
+        self.status.setText('Saved as new defaults.')
+
+    def reset_to_factory(self):
+        values = (self.store.factory_values if self.store.factory_path is not None else
+                  {key: self.store.specs[key]['factory_default'] for key in PLAYLIST_KEYS})
+        for key, pane in zip(PLAYLIST_KEYS, self.lists):
+            labels = values[key]
+            existing = {pane.items.item(i).text() for i in range(pane.items.count())}
+            for label in sorted(set(labels) - existing):
+                item = QListWidgetItem(label, pane.items)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            pane.set_selected(labels)
+        self.selection_changed()
 
     def reject(self):
-        if self.future is not None:
-            self.cancel_batch()
+        if self.save_failed and not self.selection_changed():
             return
         super().reject()
-
-    def shutdown(self):
-        self.cancelled.set()
-        self.timer.stop()
-        self.pool.shutdown(wait=False, cancel_futures=True)

@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
                                QMessageBox,QDialog,QStyle,QTextEdit,QDockWidget,
-                               QToolButton)
+                               QToolButton,QFileDialog,QProgressBar)
 from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.runtime_paths import default_models
@@ -16,7 +16,9 @@ from eyeglow_egobody.model.panel_settings import PanelSettings
 from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
 from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
-from eyeglow_egobody.ui.file_dialogs import existing_directory, paused_animation
+from eyeglow_egobody.ui.file_dialogs import paused_animation, save_file
+from eyeglow_egobody.model.playlist import ActivitiesPlaylist, PLAYLIST_KEYS
+from eyeglow_egobody.ui.playlist_analysis import PlaylistAnalysis
 
 def suspend_animation(method):
     """Stop the render clock throughout modal dialogs, including nested pickers."""
@@ -32,9 +34,12 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('EyeGlow EgoBody — Paired motion playback')
         self.dataset = dataset
-        self.model_dir = model_dir or default_models()
+        default_templates = default_models()
+        self.model_dir = model_dir or {'female': default_templates/'SMPLX_FEMALE.npz',
+                                       'male': default_templates/'SMPLX_MALE.npz'}
         self.infos = []
-        self.activity_dialog = None
+        self.activity_catalog = None
+        self.activities_playlist = None
         self.settings_session = settings_session
         self.panel_settings = (settings_session.current if settings_session is not None
                                else PanelSettings())
@@ -65,6 +70,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_frame(0,.10)
         layout.addWidget(self.viewport.interactor,1)
         self.controller = Controller(recording,self.viewport,output_root,self)
+        self.playlist_analysis = PlaylistAnalysis(self.controller, self)
 
         def button(label, callback, row=None, tooltip=None):
             widget = QPushButton(label)
@@ -217,18 +223,22 @@ class MainWindow(QMainWindow):
         recordings_panel = QWidget()
         recordings_panel.setMinimumWidth(280)
         recordings_layout = QVBoxLayout(recordings_panel)
-        self.recordings = QComboBox()
-        self.recordings.setMinimumContentsLength(28)
-        recordings_layout.addWidget(self.recordings)
-        self.metadata_label = QLabel('Discovering recordings…' if dataset else 'Synthetic fixture · invented motion')
-        self.metadata_label.setWordWrap(True)
-        self.metadata_label.setTextFormat(Qt.TextFormat.PlainText)
-        recordings_layout.addWidget(self.metadata_label)
-        self.synthetic_button = button('Synthetic review', self.load_synthetic_review, recordings_layout)
-        self.load_button = button('Load recording', self.load_selected, recordings_layout)
-        self.activity_button = button('Activity Analysis…', self.show_activity_analysis, recordings_layout)
-        self.models_button = button('SMPL-X model folder…', self.choose_models, recordings_layout)
-        self.diagnostics_button = button('Diagnostics…', self.show_diagnostics, recordings_layout)
+        self.activity_button = button('Edit activities playlist ...', self.edit_activities_playlist, recordings_layout)
+        self.playlist_summary = QLabel('No activities playlist selected.')
+        self.playlist_summary.setWordWrap(True)
+        recordings_layout.addWidget(self.playlist_summary)
+        self.analyze_playlist_button = button('Analyze activities playlist ...', self.analyze_activities_playlist, recordings_layout)
+        self.analysis_progress = QProgressBar()
+        self.analysis_progress.hide()
+        recordings_layout.addWidget(self.analysis_progress)
+        self.analysis_status = QLabel()
+        self.analysis_status.setWordWrap(True)
+        self.analysis_status.setTextFormat(Qt.TextFormat.PlainText)
+        recordings_layout.addWidget(self.analysis_status)
+        self.cancel_analysis_button = button('Cancel analysis', self.playlist_analysis.cancel, recordings_layout)
+        self.cancel_analysis_button.hide()
+        self.playlist_analysis.changed.connect(self.sync_analysis)
+        self.models_button = button('Select input data ...', self.select_input_data, recordings_layout)
         self.screenshot_button = button('Export screenshot…', lambda:self.choose_export(False), recordings_layout)
         self.video_button = button('Export video…', lambda:self.choose_export(True), recordings_layout)
         recordings_layout.addStretch(1)
@@ -256,9 +266,8 @@ class MainWindow(QMainWindow):
         self.smartglasses_dock.visibilityChanged.connect(self._sync_panel_buttons)
         self.visualization_dock.visibilityChanged.connect(self._sync_panel_buttons)
         self.recordings_dock.visibilityChanged.connect(self._sync_panel_buttons)
-        self.recordings.currentIndexChanged.connect(self.describe_selected)
         self.controller.recordings_found.connect(self.found_recordings)
-        self.controller.load_failed.connect(self.metadata_label.setText)
+        self.controller.load_failed.connect(lambda message: self.statusBar().showMessage(message))
         self.controller.loading_changed.connect(self.sync)
         self.controller.changed.connect(self.sync)
         self.controller.status.connect(self.statusBar().showMessage)
@@ -318,15 +327,7 @@ class MainWindow(QMainWindow):
 
     def inspect_participant(self, participant):
         self.orbit.setChecked(False)
-        self.viewport.inspect_participant(participant,self.controller.state.frame)
-
-    def load_synthetic_review(self):
-        if self.controller.job or self.controller.loading:
-            return
-        self.controller.set_recording(synthetic_recording())
-        self.metadata_label.setText('Synthetic review · invented paired motion · settings apply to both participants')
-        self.orbit.setChecked(False)
-        self.show_eye_test_details()
+        self.viewport.inspect_participant(participant,self.controller.source_frame)
 
     def set_optical_visibility(self, key, visible):
         setattr(self.viewport,key,visible)
@@ -350,69 +351,84 @@ class MainWindow(QMainWindow):
 
     def found_recordings(self, infos):
         self.infos = infos
-        self.recordings.clear()
-        for info in infos:
-            self.recordings.addItem(f'{info.name} · {info.split}', info)
         if infos:
-            self.load_selected()
-        else:
-            self.metadata_label.setText('No matching camera-wearer/interactee SMPL-X recording directories found.')
-
-    def describe_selected(self):
-        info = self.recordings.currentData()
-        if info:
-            self.metadata_label.setText(
-                f'{info.scene} · source frames {info.start}–{info.end} · 30 Hz Kinect cadence · '
-                f'A: wearer/body {info.body_indices[0]} · B: interactee/body {info.body_indices[1]} · '
-                'Select Load recording to validate paired frames.')
-
-    def load_selected(self):
-        info = self.recordings.currentData()
-        if info:
-            self.controller.load_recording(info, self.model_dir)
-
-    def show_activity_analysis(self):
-        from eyeglow_egobody.analysis.activities import ActivityCatalog
-        from eyeglow_egobody.ui.activity_dialog import ActivityAnalysisDialog
-        if self.activity_dialog is None:
             try:
-                catalog = ActivityCatalog(Path(self.dataset) / 'Motion-X-main' / 'mocap-dataset-process' /
-                                          'egobody_description_all.csv')
-                self.activity_dialog = ActivityAnalysisDialog(
-                    self.infos, catalog, lambda: self.panel_settings.document, self.model_dir, self)
+                self.ensure_activity_catalog()
+                self.apply_activities_playlist()
             except (OSError, ValueError, KeyError) as exc:
-                QMessageBox.warning(self, 'Activity annotations unavailable', str(exc))
-                return
-        self.activity_dialog.model_dir = self.model_dir
-        self.activity_dialog.show()
-        self.activity_dialog.raise_()
-        self.activity_dialog.activateWindow()
+                self.statusBar().showMessage(f'Activities playlist unavailable: {exc}')
+                self.controller.load_recording(infos[0], self.model_dir)
+
+    def ensure_activity_catalog(self):
+        from eyeglow_egobody.analysis.activities import ActivityCatalog
+        if self.activity_catalog is None:
+            self.activity_catalog = ActivityCatalog(Path(self.dataset) / 'Motion-X-main' /
+                'mocap-dataset-process' / 'egobody_description_all.csv')
+
+    def apply_activities_playlist(self):
+        self.activities_playlist = ActivitiesPlaylist(self.infos, self.activity_catalog,
+            tuple(self.panel_settings.values[key] for key in PLAYLIST_KEYS))
+        self.playlist_summary.setText(self.activities_playlist.summary)
+        self.controller.set_playlist(self.activities_playlist, self.model_dir)
+        self.sync()
 
     @suspend_animation
-    def choose_models(self):
-        folder = existing_directory(self, 'Folder containing SMPLX_MALE.npz / SMPLX_FEMALE.npz', str(self.model_dir))
-        if folder:
-            self.model_dir = Path(folder)
-            self.load_selected()
-
-    @suspend_animation
-    def show_diagnostics(self):
-        dialog = QDialog(self)
-        dialog.setWindowTitle('Recording and placement diagnostics')
-        dialog.resize(760,560)
-        layout = QVBoxLayout(dialog)
-        text = QTextEdit()
-        text.setReadOnly(True)
-        recording, frame = self.controller.recording, self.controller.state.frame
-        diagnostics = {**recording.metadata, 'current_source_frame': int(recording.frame_ids[frame]),
-                       'current_valid': recording.valid[:,frame].tolist(),
-                       'current_pelvis_m': recording.joints[:,frame,0].tolist(),
-                       'current_head_transforms': recording.heads[:,frame].tolist(),
-                       'current_eye_centers_m': None if recording.eyes is None else recording.eyes[:,frame].tolist(),
-                       'optical_settings': self.panel_settings.values}
-        text.setPlainText(json.dumps(diagnostics, indent=2))
-        layout.addWidget(text)
+    def edit_activities_playlist(self):
+        from eyeglow_egobody.ui.activity_dialog import ActivitiesPlaylistDialog
+        try:
+            self.ensure_activity_catalog()
+        except (OSError, ValueError, KeyError) as exc:
+            QMessageBox.warning(self, 'Activity annotations unavailable', str(exc))
+            return
+        self.controller.state.playing = False
+        dialog = ActivitiesPlaylistDialog(self.infos, self.activity_catalog, self.panel_settings,
+                                           self._save_user_defaults, self)
         dialog.exec()
+        self.apply_activities_playlist()
+        dialog.deleteLater()
+
+    @suspend_animation
+    def analyze_activities_playlist(self):
+        playlist = self.activities_playlist
+        if playlist is None or not playlist.frame_count or self.playlist_analysis.busy:
+            return
+        name, _ = save_file(self, 'Analyze activities playlist ...',
+            str(Path.home()/'activity-analysis.jsonl'), 'JSON Lines (*.jsonl)',
+            options=QFileDialog.Option.DontConfirmOverwrite)
+        if not name:
+            return
+        destination = Path(name)
+        if not destination.suffix:
+            destination = destination.with_suffix('.jsonl')
+        overwrite = destination.exists()
+        if overwrite and QMessageBox.question(self, 'Replace file?', f'Replace {destination.name}?') != QMessageBox.StandardButton.Yes:
+            return
+        self.playlist_analysis.start(self.infos, self.activity_catalog, playlist,
+            self.panel_settings.document, self.model_dir, destination, overwrite)
+
+    def sync_analysis(self):
+        analysis = self.playlist_analysis
+        self.analysis_status.setText(analysis.message)
+        self.analysis_progress.setVisible(analysis.busy)
+        current, total = analysis.progress
+        self.analysis_progress.setRange(0, total)
+        self.analysis_progress.setValue(current)
+        self.cancel_analysis_button.setVisible(analysis.busy)
+        self.sync()
+
+    @suspend_animation
+    def select_input_data(self):
+        from eyeglow_egobody.ui.input_data_dialog import InputDataDialog
+        dialog = InputDataDialog(self.panel_settings, self._save_user_defaults, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            from eyeglow_egobody.ui.input_data_dialog import FIELDS
+            values = self.panel_settings.values
+            self.dataset = Path(values[FIELDS[0]])
+            self.model_dir = {'female': Path(values[FIELDS[1]]), 'male': Path(values[FIELDS[2]])}
+            self.infos = []
+            self.activity_catalog = None
+            self.activities_playlist = None
+            self.controller.discover_recordings(self.dataset)
 
     @suspend_animation
     def choose_export(self, video):
@@ -456,13 +472,14 @@ class MainWindow(QMainWindow):
             self.slider.setRange(0,state.frame_count-1)
             self.slider.setValue(state.frame)
         recording = self.controller.recording
-        self.counter.setText(f'{state.frame+1} / {state.frame_count} · '
-                             f'{recording.timestamps[state.frame]:.2f} s · ID {recording.frame_ids[state.frame]}')
-        if recording.metadata and getattr(self, "_described_recording", None) is not recording:
-            self.metadata_label.setText(f'{recording.name} · {recording.metadata["scene"]} · '
-                                       f'{recording.metadata["paired_frames"]}/{recording.frame_count} paired valid · '
-                                       f'{recording.fps:g} Hz · {recording.metadata["cache_status"]}')
-            self._described_recording = recording
+        frame = self.controller.source_frame
+        playlist = self.controller.playlist
+        if playlist is not None:
+            self.counter.setText(f'{state.frame/30 if playlist.frame_count else 0:.2f} / {playlist.duration_s:.2f} s · '
+                                 f'{len(playlist.clips)} clips')
+        else:
+            self.counter.setText(f'{state.frame+1} / {state.frame_count} · '
+                                 f'{recording.timestamps[frame]:.2f} s · ID {recording.frame_ids[frame]}')
         self.play.setIcon(self._pause_icon if state.playing else self._play_icon)
         self.play.setAccessibleName('Pause' if state.playing else 'Play')
         busy = self.controller.job is not None
@@ -475,22 +492,23 @@ class MainWindow(QMainWindow):
             self.setMaximumSize(maximum)
             self._export_size_limits = None
         loading = self.controller.loading is not None
-        usable = bool(recording.valid.any())
-        self.synthetic_button.setEnabled(not busy and not loading)
-        self.load_button.setEnabled(not busy and not loading and bool(self.infos))
-        self.activity_button.setEnabled(bool(self.infos))
-        self.recordings.setEnabled(not busy and not loading)
-        self.models_button.setEnabled(not busy and not loading)
-        self.controls.setEnabled(not busy and not loading and usable)
-        self.smartglasses_panel.setEnabled(not busy)
-        self.screenshot_button.setEnabled(not busy and not loading and usable)
-        self.video_button.setEnabled(not busy and not loading and usable)
+        analyzing = self.playlist_analysis.busy
+        locked = busy or analyzing
+        usable = bool(playlist.frame_count) if playlist is not None else bool(recording.valid.any())
+        self.activity_button.setEnabled(not locked and bool(self.infos))
+        self.analyze_playlist_button.setEnabled(not locked and self.activities_playlist is not None
+                                                and bool(self.activities_playlist.frame_count))
+        self.models_button.setEnabled(not locked and not loading)
+        self.controls.setEnabled(not locked and usable and (not loading or playlist is not None))
+        self.play.setEnabled(not locked and not loading and usable)
+        self.smartglasses_panel.setEnabled(not locked)
+        self.screenshot_button.setEnabled(not locked and not loading and usable)
+        self.video_button.setEnabled(not locked and not loading and usable and playlist is None)
         self.viewport.setEnabled(not busy)
         self.cancel.setVisible(busy)
 
     def closeEvent(self,event):
-        if self.activity_dialog is not None:
-            self.activity_dialog.shutdown()
+        self.playlist_analysis.shutdown()
         self.controller.close()
         self.viewport.close()
         self.display_settings_dialog.close()

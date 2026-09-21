@@ -28,6 +28,10 @@ class Controller(QObject):
         self.recording, self.viewport = recording, viewport
         self.output_root = output_root
         self.state = PlaybackState(recording.frame_count, recording.fps)
+        self.playlist = None
+        self.playlist_model_dir = None
+        self.playlist_resume = False
+        self.analysis_active = False
         self.export_start, self.export_end = 0, recording.frame_count-1
         self.optical_parameters = OpticalParameters.from_settings(getattr(viewport, "optical_settings", {}))
         self.frustum_opacity = .10
@@ -63,7 +67,7 @@ class Controller(QObject):
         self.load_cancel = Event()
         self.load_generation += 1
         self.state.playing = False
-        kwargs = {'cancelled': self.load_cancel} if kind == 'recording' else {}
+        kwargs = {'cancelled': self.load_cancel} if kind in ('recording', 'playlist') else {}
         self.loading = (kind, self.load_pool.submit(function, *args, **kwargs), self.load_generation)
         self.status.emit('Discovering recordings…' if kind == 'discovery' else 'Loading and validating paired motion…')
         self.loading_changed.emit()
@@ -80,12 +84,21 @@ class Controller(QObject):
                 return
             if kind == 'discovery':
                 self.recordings_found.emit(result)
+            elif kind == 'playlist':
+                self.viewport.set_recording(result)
+                self.recording = result
+                self.state.playing = self.playlist_resume
+                self.playlist_resume = False
+                self.last = monotonic()
+                self.refresh()
             else:
                 self.set_recording(result)
                 self.status.emit(f'Loaded {result.name} · {result.metadata.get("cache_status", "")}')
         except CancelledError:
             pass
         except Exception as exc:
+            self.playlist_resume = False
+            self.state.playing = False
             logging.getLogger(__name__).exception('%s loading failed', kind)
             self.status.emit(str(exc))
             self.load_failed.emit(str(exc))
@@ -99,13 +112,17 @@ class Controller(QObject):
         speed, loop = self.state.speed, self.state.loop
         self.viewport.set_recording(recording)
         self.recording = recording
+        self.playlist = None
         self.state = PlaybackState(recording.frame_count, recording.fps, speed=speed, loop=loop)
         self.export_start, self.export_end = 0, recording.frame_count-1
         self.last = monotonic()
         self.refresh()
 
     def refresh(self):
-        frame = self.state.frame
+        if self.playlist is not None and not self.playlist.frame_count:
+            self.changed.emit()
+            return
+        frame = self.source_frame
         recording = self.recording
         self.current_visibility = (None if recording.eyes is None else analyze_visibility(
             recording.heads[:,frame:frame+1], recording.eyes[:,frame:frame+1],
@@ -115,15 +132,72 @@ class Controller(QObject):
         self.viewport.set_frame(frame, self.frustum_opacity)
         self.changed.emit()
 
-    def seek(self, frame):
-        if self.job or self.loading:
-            return
-        self.state.seek(frame)
-        self.last = monotonic()
+    @property
+    def source_frame(self):
+        if self.playlist is not None and self.playlist.frame_count:
+            clip, source = self.playlist.locate(self.state.frame)
+            if clip.info.name == self.recording.name:
+                return source - clip.info.start
+            return 0
+        return self.state.frame if self.playlist is None else 0
+
+    def set_playlist(self, playlist, model_dir):
+        self.load_cancel.set()
+        self.load_generation += 1
+        self.loading = None
+        self.playlist = playlist
+        self.playlist_model_dir = model_dir
+        self.playlist_resume = False
+        self.state = PlaybackState(max(1, playlist.frame_count), playlist.fps,
+                                   speed=self.state.speed, loop=self.state.loop)
+        self.export_start, self.export_end = 0, self.recording.frame_count-1
+        if playlist.frame_count:
+            self._show_playlist_frame()
+        else:
+            self.current_visibility = None
+            self.changed.emit()
+        self.loading_changed.emit()
+
+    def _show_playlist_frame(self):
+        clip, _ = self.playlist.locate(self.state.frame)
+        if self.recording.name == clip.info.name:
+            self.refresh()
+        else:
+            from eyeglow_egobody.egobody.loading import load_recording
+            self.playlist_resume = self.state.playing
+            self._submit_load('playlist', load_recording, clip.info, self.playlist_model_dir)
+
+    def show_analysis_frame(self, recording, playlist_frame):
+        """Called only by the GUI thread, with a bounded latest-frame preview."""
+        if self.recording is not recording:
+            self.viewport.set_recording(recording)
+            self.recording = recording
+        self.state.seek(playlist_frame)
         self.refresh()
 
+    def seek(self, frame):
+        if self.job or self.analysis_active:
+            return
+        if self.loading and self.playlist is None:
+            return
+        if self.playlist is not None and not self.playlist.frame_count:
+            return
+        if self.loading:
+            self.load_cancel.set()
+            self.load_generation += 1
+            self.loading = None
+            self.playlist_resume = False
+        self.state.seek(frame)
+        self.last = monotonic()
+        if self.playlist is None:
+            self.refresh()
+        else:
+            self._show_playlist_frame()
+
     def toggle(self):
-        if not self.job and not self.loading:
+        if self.playlist is not None and not self.playlist.frame_count:
+            return
+        if not self.job and not self.loading and not self.analysis_active:
             self.state.playing = not self.state.playing
             self.last = monotonic()
             self.changed.emit()
@@ -154,7 +228,7 @@ class Controller(QObject):
         elapsed, self.last = now-self.last, now
         if self.job:
             self._export_tick()
-        else:
+        elif not self.analysis_active:
             if self.orbit_enabled and not self.orbit_suspended:
                 self.viewport.orbit_by(self.orbit_speed * elapsed)
             self._advance_playback(elapsed)
@@ -164,7 +238,10 @@ class Controller(QObject):
             previous = self.state.frame
             self.state.advance(elapsed)
             if previous != self.state.frame:
-                self.refresh()
+                if self.playlist is None:
+                    self.refresh()
+                else:
+                    self._show_playlist_frame()
             else:
                 self.changed.emit()
 
@@ -175,7 +252,10 @@ class Controller(QObject):
         self._start_export(destination, True, overwrite, settings)
 
     def _start_export(self, destination, video, overwrite, settings=None):
-        if self.job or self.loading or not self.recording.valid.any():
+        if self.job or self.loading or self.analysis_active or not self.recording.valid.any():
+            return
+        if video and self.playlist is not None:
+            self.export_failed.emit('Load a recording to export a video. Playlist video export is not available.')
             return
         try:
             destination = safe_destination(destination)

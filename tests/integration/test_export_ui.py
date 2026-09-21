@@ -87,6 +87,16 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert window.size().height() == round(expected_width * 2 / 3) + 48
         assert window.minimumSize().width() == 720
         assert window.minimumSize().height() == 528
+        assert window.activity_button.text() == 'Edit activities playlist ...'
+        assert window.analyze_playlist_button.text() == 'Analyze activities playlist ...'
+        assert window.analyze_playlist_button.parent() is window.recordings_panel
+        assert not window.analyze_playlist_button.isEnabled()
+        assert window.models_button.text() == 'Select input data ...'
+        assert not hasattr(window, 'recordings')
+        assert not hasattr(window, 'metadata_label')
+        assert not hasattr(window, 'synthetic_button')
+        assert not hasattr(window, 'load_button')
+        assert not hasattr(window, 'diagnostics_button')
         assert [window.smartglasses_dock.isHidden(), window.visualization_dock.isHidden(),
                 window.recordings_dock.isHidden()] == [True, True, True]
         assert window.smartglasses_toggle.text() == '◀ Smartglasses'
