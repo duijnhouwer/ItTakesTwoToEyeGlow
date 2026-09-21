@@ -39,6 +39,35 @@ def test_combined_index_has_no_gaps_or_duplicate_frames(playlist_data):
     assert playlist.duration_s == pytest.approx(8/30)
     actual = [(playlist.locate(f)[0].info.name, playlist.locate(f)[1]) for f in range(8)]
     assert actual == [('r1',10),('r1',11),('r1',12),('r1',16),('r1',17),('r2',11),('r2',12),('r2',13)]
+    # The r1-to-r2 recording boundary starts a new pair clip even though the
+    # normalized activity labels remain talk/listen on both sides.
+    assert playlist.pair_clip_offsets == [0, 3, 5]
+    assert playlist.previous_pair_clip_offset(0) is None
+    assert playlist.previous_pair_clip_offset(2) is None
+    assert playlist.previous_pair_clip_offset(4) == 0
+    assert playlist.previous_pair_clip_offset(5) == 3
+    assert playlist.next_pair_clip_offset(0) == 3
+    assert playlist.next_pair_clip_offset(4) == 5
+    assert playlist.next_pair_clip_offset(5) is None
+
+
+def test_activity_combinations_ignore_annotation_edges_with_unchanged_labels(tmp_path):
+    from eyeglow_egobody.analysis.activities import Annotation, Segment
+    info = SimpleNamespace(name='r1')
+    def annotation(source_id, body, start, end, label):
+        return Annotation(source_id, 'r1', body, start, end, label, label)
+    talk_1 = annotation('1', 0, 0, 2, 'talk')
+    talk_2 = annotation('2', 0, 2, 4, 'talk')
+    listen = annotation('3', 1, 0, 6, 'listen')
+    dance = annotation('4', 0, 4, 6, 'dance')
+    segments = [Segment(0, 2, ((talk_1,), (listen,))),
+                Segment(2, 4, ((talk_2,), (listen,))),
+                Segment(4, 6, ((dance,), (listen,)))]
+    catalog = SimpleNamespace(segments=lambda *_: iter(segments))
+    playlist = ActivitiesPlaylist([info], catalog, (('talk', 'dance'), ('listen',)))
+    assert len(playlist.clips) == 3
+    assert playlist.pair_clip_offsets == [0, 4]
+    assert playlist.summary.startswith('2 activity pair clips')
 
 
 def test_lazy_playback_scrub_cross_recording_resume_and_empty(qt_app, tmp_path, playlist_data, monkeypatch):

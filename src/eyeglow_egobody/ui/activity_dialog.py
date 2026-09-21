@@ -63,7 +63,8 @@ class ActivitiesPlaylistDialog(QDialog):
         self.save_user_defaults = save_user_defaults
         self.save_failed = False
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel('Include clips where both participants match their selected actions.'))
+        layout.addWidget(QLabel(
+            'Include activity pair clips where both participants match their selected actions.'))
         row = QHBoxLayout()
         values = store.values
         labels = sorted(set(catalog.labels) | set(values[PLAYLIST_KEYS[0]]) | set(values[PLAYLIST_KEYS[1]]))

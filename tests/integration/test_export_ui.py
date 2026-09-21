@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QFileDialog, QDialog, QMessageBox,
                                QSizePolicy, QGroupBox)
@@ -151,6 +152,30 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert not hasattr(window, 'eye_test_button')
         assert not hasattr(window, 'visibility_label')
         assert not hasattr(window, 'visibility_dialog')
+        assert not hasattr(window, 'jump_start')
+        assert not window.previous_pair_clip_button.icon().isNull()
+        assert not window.next_pair_clip_button.icon().isNull()
+        assert window.previous_pair_clip_button.toolTip() == 'Previous activity pair clip'
+        assert window.next_pair_clip_button.toolTip() == 'Next activity pair clip'
+        assert not window.previous_pair_clip_button.isEnabled()
+        assert not window.next_pair_clip_button.isEnabled()
+        clip = SimpleNamespace(
+            info=SimpleNamespace(name=window.controller.recording.name, start=0))
+        playlist = SimpleNamespace(
+            frame_count=4, duration_s=4/30, clips=[object(), object()],
+            pair_clip_offsets=[0, 2],
+            locate=lambda frame: (clip, frame),
+            previous_pair_clip_offset=lambda frame: None if frame == 0 else 0,
+            next_pair_clip_offset=lambda frame: 2 if frame < 2 else None)
+        window.controller.playlist = playlist
+        window.controller.state.seek(0)
+        window.sync()
+        assert not window.previous_pair_clip_button.isEnabled()
+        assert window.next_pair_clip_button.isEnabled()
+        window.controller.state.seek(2)
+        window.sync()
+        assert window.previous_pair_clip_button.isEnabled()
+        assert not window.next_pair_clip_button.isEnabled()
         assert window.corner(Qt.Corner.TopLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
         assert window.corner(Qt.Corner.BottomLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
         assert window.corner(Qt.Corner.TopRightCorner) == Qt.DockWidgetArea.RightDockWidgetArea

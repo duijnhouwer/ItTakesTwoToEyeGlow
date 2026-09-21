@@ -31,7 +31,7 @@ def test_playlist_counts_current_defaults_reset_and_reopen(qt_app, tmp_path):
         dialog.lists[1].select_all(True)
         assert len(dialog.playlist.clips) == 2
         assert dialog.playlist.duration_s == 2
-        assert '2 clips' in dialog.summary.text()
+        assert '2 activity pair clips' in dialog.summary.text()
         dialog.lists[1].search.setText('dance')
         assert len(dialog.lists[1].selected()) == 3
         assert PanelSettings(session.current_path, factory).values[PLAYLIST_KEYS[0]] == ['casual_chat']

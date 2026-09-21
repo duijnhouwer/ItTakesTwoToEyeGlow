@@ -176,21 +176,24 @@ class MainWindow(QMainWindow):
                 self.viewport.interactor.mapToGlobal(position)))
         row = QHBoxLayout()
         controls_layout.addLayout(row)
-        self.jump_start = button('',lambda:self.controller.seek(0),row,'Jump to Start')
-        self.previous_frame = button('−1',lambda:self.controller.seek(self.controller.state.frame-1),row,'Previous Frame')
+        self.previous_pair_clip_button = button(
+            '', self._seek_previous_pair_clip, row, 'Previous activity pair clip')
         self.play = button('',self.controller.toggle,row,'Play/Pause')
-        self.next_frame = button('+1',lambda:self.controller.seek(self.controller.state.frame+1),row,'Next Frame')
-        playback_buttons = (self.jump_start, self.previous_frame, self.play, self.next_frame)
+        self.next_pair_clip_button = button(
+            '', self._seek_next_pair_clip, row, 'Next activity pair clip')
+        playback_buttons = (self.previous_pair_clip_button, self.play,
+                            self.next_pair_clip_button)
         self._play_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay)
         self._pause_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause)
-        self.jump_start.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipBackward))
+        self.previous_pair_clip_button.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipBackward))
+        self.next_pair_clip_button.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSkipForward))
         self.play.setIcon(self._play_icon)
-        for widget in (self.jump_start, self.play):
+        for widget in playback_buttons:
             widget.setIconSize(QSize(14,14))
         height = max(widget.sizeHint().height() for widget in playback_buttons)
-        # Fit the numeric labels and equally sized icons with modest padding.
-        width = max(14, *(widget.fontMetrics().horizontalAdvance(label)
-                         for widget in playback_buttons for label in ('−1', '+1'))) + 16
+        width = 30
         for widget in playback_buttons:
             widget.setFixedSize(width, height)
         self.slider = QSlider(Qt.Orientation.Horizontal)
@@ -325,6 +328,20 @@ class MainWindow(QMainWindow):
     def inspect_participant(self, participant):
         self.orbit.setChecked(False)
         self.viewport.inspect_participant(participant,self.controller.source_frame)
+
+    def _seek_previous_pair_clip(self):
+        playlist = self.controller.playlist
+        if playlist is not None:
+            target = playlist.previous_pair_clip_offset(self.controller.state.frame)
+            if target is not None:
+                self.controller.seek(target)
+
+    def _seek_next_pair_clip(self):
+        playlist = self.controller.playlist
+        if playlist is not None:
+            target = playlist.next_pair_clip_offset(self.controller.state.frame)
+            if target is not None:
+                self.controller.seek(target)
 
     @suspend_animation
     def show_settings(self):
@@ -463,7 +480,7 @@ class MainWindow(QMainWindow):
         playlist = self.controller.playlist
         if playlist is not None:
             self.counter.setText(f'{state.frame/30 if playlist.frame_count else 0:.2f} / {playlist.duration_s:.2f} s · '
-                                 f'{len(playlist.clips)} clips')
+                                 f'{len(playlist.pair_clip_offsets)} activity pair clips')
         else:
             self.counter.setText(f'{state.frame+1} / {state.frame_count} · '
                                  f'{recording.timestamps[frame]:.2f} s · ID {recording.frame_ids[frame]}')
@@ -488,6 +505,12 @@ class MainWindow(QMainWindow):
         self.models_button.setEnabled(not locked and not loading)
         self.controls.setEnabled(not locked and usable and (not loading or playlist is not None))
         self.play.setEnabled(not locked and not loading and usable)
+        can_navigate = not locked and not loading and playlist is not None
+        self.previous_pair_clip_button.setEnabled(
+            can_navigate
+            and playlist.previous_pair_clip_offset(state.frame) is not None)
+        self.next_pair_clip_button.setEnabled(
+            can_navigate and playlist.next_pair_clip_offset(state.frame) is not None)
         self.smartglasses_panel.setEnabled(not locked)
         self.screenshot_button.setEnabled(not locked and not loading and usable)
         self.video_button.setEnabled(not locked and not loading and usable)
