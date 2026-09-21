@@ -44,7 +44,7 @@ class ActivitiesPlaylist:
 
     @property
     def summary(self):
-        return (f'{len(self.pair_clip_offsets)} activity pair clips · '
+        return (f'{len(self.pair_clip_offsets)} activity pair clips\n'
                 f'{self.duration_s:.2f} s combined duration')
 
     def locate(self, frame):

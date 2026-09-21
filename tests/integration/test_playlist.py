@@ -67,7 +67,7 @@ def test_activity_combinations_ignore_annotation_edges_with_unchanged_labels(tmp
     playlist = ActivitiesPlaylist([info], catalog, (('talk', 'dance'), ('listen',)))
     assert len(playlist.clips) == 3
     assert playlist.pair_clip_offsets == [0, 4]
-    assert playlist.summary.startswith('2 activity pair clips')
+    assert playlist.summary == '2 activity pair clips\n0.20 s combined duration'
 
 
 def test_lazy_playback_scrub_cross_recording_resume_and_empty(qt_app, tmp_path, playlist_data, monkeypatch):
