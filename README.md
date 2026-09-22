@@ -1,4 +1,4 @@
-# EyeGlow EgoBody
+# ItTakesTwoToEyeGlow
 
 The desktop now discovers paired EgoBody SMPL-X recordings and loads them in a
 background worker for synchronized skeleton playback. Licensed SMPL-X model NPZ files are loaded by default from
@@ -102,8 +102,8 @@ Set `QT_WAYLAND_DECORATION=adwaita` when launching to use Qt's original decorati
 .venv/bin/python -m pytest
 .venv/bin/python -m eyeglow_egobody --smoke-test --output-dir "$PWD/.runtime/source-smoke"
 PYINSTALLER_CONFIG_DIR="$PWD/.runtime/pyinstaller" .venv/bin/python -m PyInstaller --clean --noconfirm eyeglow.spec
-./dist/EyeGlowEgoBody/EyeGlowEgoBody --smoke-test --output-dir "$PWD/.runtime/package-smoke"
-./dist/EyeGlowEgoBody/EyeGlowEgoBody
+./dist/ItTakesTwoToEyeGlow/ItTakesTwoToEyeGlow --smoke-test --output-dir "$PWD/.runtime/package-smoke"
+./dist/ItTakesTwoToEyeGlow/ItTakesTwoToEyeGlow
 ```
 
 The packaged executable contains a snapshot of the Python source. Rebuild it after
@@ -111,13 +111,25 @@ source changes, especially changes to the settings format: the source app and
 packaged app read the same `config/settings_panel.json`. Validate the rebuilt
 executable with the packaged smoke command above before handing off a change.
 
+### Linux application launcher
+
+Install the packaged application in the current user's application menu with:
+
+```bash
+.venv/bin/python scripts/install_linux_launcher.py
+```
+
+The installed ItTakesTwoToEyeGlow launcher supplies the application icon and opts into
+single-instance behavior. A second launcher click raises the existing window.
+Direct terminal launches remain independent and may run multiple instances.
+
 The smoke test first checks loading fit arrays with both legacy and current NumPy
 pickle module names, using the bundled NumPy when run from the packaged executable.
 Users do not need to install Python or NumPy separately.
 It then drives the actual event loop, exercises playback speeds, scrubbing,
 camera changes, live geometry, actor reuse, native-size screenshot, FHD/4K captures, and a 60-frame FHD MP4 export at 24 fps, then
 exits with a machine-readable report. It is not a substitute for hands-on review.
-Distribute the entire `dist/EyeGlowEgoBody/` directory, not just the executable.
+Distribute the entire `dist/ItTakesTwoToEyeGlow/` directory, not just the executable.
 
 See [Phase 1 validation](docs/PHASE1_VALIDATION.md) for the tested baseline and
 remaining joint review. Dependencies are pinned in `requirements-lock.txt`.

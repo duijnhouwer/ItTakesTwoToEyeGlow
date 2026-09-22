@@ -244,10 +244,20 @@ class SettingsSession:
             _validate_schema(document)
         except (OSError, ValueError, KeyError, TypeError):
             return  # The normal settings validation/recovery flow handles it.
-        missing = [name for name in self.factory.document['settings'] if name not in document['settings']]
-        if missing:
-            for name in missing:
-                document['settings'][name] = deepcopy(self.factory.document['settings'][name])
+        changed = False
+        for group_name, factory_group in self.factory.document['settings'].items():
+            if group_name not in document['settings']:
+                document['settings'][group_name] = deepcopy(factory_group)
+                changed = True
+                continue
+            if 'display_name' in factory_group:
+                continue
+            group = document['settings'][group_name]
+            for setting_name, factory_spec in factory_group.items():
+                if setting_name not in group:
+                    group[setting_name] = deepcopy(factory_spec)
+                    changed = True
+        if changed:
             if read_only:
                 path.chmod(0o644)
             _atomic_write(path, document)

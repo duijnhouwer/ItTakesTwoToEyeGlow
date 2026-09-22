@@ -7,8 +7,9 @@ from eyeglow_egobody.model.recording import synthetic_recording
 
 
 class FakeViewport:
-    def set_frame(self, frame, spread):
+    def set_frame(self, frame, spread, wall_spread=.40):
         self.frame, self.frustum_opacity = frame, spread
+        self.frustum_wall_opacity = wall_spread
 
     def capture_size(self):
         return (16,16)
@@ -62,7 +63,8 @@ def test_export_locks_frame_and_parameter_mutation(controller):
     controller.set_frustum_opacity(.8)
     controller.toggle()
     assert controller.state.frame == 10
-    assert controller.frustum_opacity == .10
+    assert controller.frustum_opacity == .05
+    assert controller.frustum_wall_opacity == .40
     assert not controller.state.playing
     controller.cancel_export()
     controller._export_tick()

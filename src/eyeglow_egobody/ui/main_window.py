@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
                                QMessageBox,QDialog,QStyle,QDockWidget,QToolButton,
-                               QFileDialog,QProgressBar,QMenu,QSizePolicy)
+                               QFileDialog,QProgressBar,QMenu,QSizePolicy,QButtonGroup)
 from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.runtime_paths import default_models
@@ -16,7 +16,8 @@ from eyeglow_egobody.model.panel_settings import PanelSettings
 from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
 from eyeglow_egobody.ui.file_dialogs import paused_animation, save_file
-from eyeglow_egobody.model.playlist import ActivitiesPlaylist, PLAYLIST_KEYS
+from eyeglow_egobody.model.playlist import (ActivitiesPlaylist, PLAYLIST_KEYS,
+                                            playlist_selections)
 from eyeglow_egobody.ui.playlist_analysis import PlaylistAnalysis
 
 def suspend_animation(method):
@@ -31,7 +32,7 @@ def suspend_animation(method):
 class MainWindow(QMainWindow):
     def __init__(self, output_root, dataset=None, model_dir=None, settings_session=None):
         super().__init__()
-        self.setWindowTitle('EyeGlow EgoBody — Paired motion playback')
+        self.setWindowTitle('ItTakesTwoToEyeGlow')
         self.dataset = dataset
         default_templates = default_models()
         self.model_dir = model_dir or {'female': default_templates/'SMPLX_FEMALE.npz',
@@ -66,10 +67,12 @@ class MainWindow(QMainWindow):
         self.viewport = Viewport(root,recording)
         initial_settings = self.panel_settings.values
         self.viewport.optical_settings = initial_settings
-        self.viewport.set_frame(0, initial_settings['frustum_opacity'])
+        self.viewport.set_frame(0, initial_settings['frustum_opacity'],
+                                initial_settings['frustum_wall_opacity'])
         layout.addWidget(self.viewport.interactor,1)
         self.controller = Controller(recording,self.viewport,output_root,self)
         self.controller.frustum_opacity = initial_settings['frustum_opacity']
+        self.controller.frustum_wall_opacity = initial_settings['frustum_wall_opacity']
         self.playlist_analysis = PlaylistAnalysis(self.controller, self)
 
         def button(label, callback, row=None, tooltip=None):
@@ -85,7 +88,8 @@ class MainWindow(QMainWindow):
         # The only persistent chrome around the viewport is this three-button rail.
         panel_buttons = QHBoxLayout()
         panel_buttons.setContentsMargins(8,6,8,6)
-        self.smartglasses_toggle = button('◀ Smartglasses', lambda: self._toggle_dock(self.smartglasses_dock))
+        self.smartglasses_toggle = button(
+            '◀ Geometry', lambda: self._toggle_dock(self.smartglasses_dock))
         self.visualization_toggle = button('Visualization ▼', lambda: self._toggle_dock(self.visualization_dock))
         self.recordings_toggle = button(
             'Playlist and analysis ▶',
@@ -116,13 +120,19 @@ class MainWindow(QMainWindow):
         controls_layout.addLayout(camera)
         button('Reset camera',self.viewport.reset_view,camera)
         button('Fit participants',self.viewport.fit_participants,camera)
-        button('Fit optics',lambda:self.viewport.fit_optics(),camera)
-        button('Inspect A',lambda:self.inspect_participant(0),camera)
-        button('Inspect B',lambda:self.inspect_participant(1),camera)
-        self.orbit = QCheckBox('Orbit')
+        self.inspect_a_button = button(
+            'Inspect A', lambda:self.inspect_participant(0), camera)
+        self.inspect_b_button = button(
+            'Inspect B', lambda:self.inspect_participant(1), camera)
+        self.orbit = QPushButton('Orbit')
         self.orbit.setToolTip('Automatically orbit around world Z, including while playback is paused.')
         self.orbit.toggled.connect(self.controller.set_orbit_enabled)
         camera.addWidget(self.orbit)
+        self.view_mode_buttons = QButtonGroup(self)
+        self.view_mode_buttons.setExclusive(True)
+        for mode_button in (self.inspect_a_button, self.inspect_b_button, self.orbit):
+            mode_button.setCheckable(True)
+            self.view_mode_buttons.addButton(mode_button)
         self.orbit_speed = QDoubleSpinBox()
         self.orbit_speed.setRange(-360,360)
         self.orbit_speed.setDecimals(1)
@@ -163,6 +173,7 @@ class MainWindow(QMainWindow):
             flat_groups=('visualization',), scrollable=False)
         self.display_settings_editor.saved.connect(self._apply_panel_settings)
         self.frustum_opacity = self.display_settings_editor.fields['frustum_opacity']
+        self.frustum_wall_opacity = self.display_settings_editor.fields['frustum_wall_opacity']
         display_settings_layout.addWidget(self.display_settings_editor)
         self.display_settings_button.clicked.connect(self.show_display_settings)
         self.viewport_context_menu = QMenu(self.viewport.interactor)
@@ -294,7 +305,7 @@ class MainWindow(QMainWindow):
         self.visualization_toggle.setChecked(not self.visualization_dock.isHidden())
         self.recordings_toggle.setChecked(not self.recordings_dock.isHidden())
         self.smartglasses_toggle.setText(
-            ('▶' if not self.smartglasses_dock.isHidden() else '◀') + ' Smartglasses')
+            ('▶' if not self.smartglasses_dock.isHidden() else '◀') + ' Geometry')
         self.visualization_toggle.setText(
             'Visualization ' + ('▲' if not self.visualization_dock.isHidden() else '▼'))
         self.recordings_toggle.setText(
@@ -306,6 +317,7 @@ class MainWindow(QMainWindow):
         self.controller.optical_parameters = self.panel_settings.optical_parameters
         self.viewport.optical_settings = values
         self.controller.frustum_opacity = values['frustum_opacity']
+        self.controller.frustum_wall_opacity = values['frustum_wall_opacity']
         self.controller.refresh()
         self.statusBar().showMessage('Settings updated')
 
@@ -326,7 +338,7 @@ class MainWindow(QMainWindow):
         self.display_settings_dialog.activateWindow()
 
     def inspect_participant(self, participant):
-        self.orbit.setChecked(False)
+        (self.inspect_a_button if participant == 0 else self.inspect_b_button).setChecked(True)
         self.viewport.inspect_participant(participant,self.controller.source_frame)
 
     def _seek_previous_pair_clip(self):
@@ -376,8 +388,10 @@ class MainWindow(QMainWindow):
                 'mocap-dataset-process' / 'egobody_description_all.csv')
 
     def apply_activities_playlist(self):
+        selections = playlist_selections(self.panel_settings.values,
+                                         self.activity_catalog.labels)
         self.activities_playlist = ActivitiesPlaylist(self.infos, self.activity_catalog,
-            tuple(self.panel_settings.values[key] for key in PLAYLIST_KEYS))
+                                                       selections)
         self.playlist_summary.setText(self.activities_playlist.summary)
         self.controller.set_playlist(self.activities_playlist, self.model_dir)
         self.sync()
@@ -479,8 +493,11 @@ class MainWindow(QMainWindow):
         frame = self.controller.source_frame
         playlist = self.controller.playlist
         if playlist is not None:
-            self.counter.setText(f'{state.frame/30 if playlist.frame_count else 0:.2f} / {playlist.duration_s:.2f} s · '
-                                 f'{len(playlist.pair_clip_offsets)} activity pair clips')
+            current_clip = playlist.pair_clip_number(state.frame) if playlist.frame_count else 0
+            current_seconds = state.frame / playlist.fps if playlist.frame_count else 0
+            self.counter.setText(
+                f'{current_clip} / {len(playlist.pair_clip_offsets)} activity pair clips · '
+                f'{current_seconds:.2f} / {playlist.duration_s:.2f} s')
         else:
             self.counter.setText(f'{state.frame+1} / {state.frame_count} · '
                                  f'{recording.timestamps[frame]:.2f} s · ID {recording.frame_ids[frame]}')

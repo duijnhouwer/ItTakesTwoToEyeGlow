@@ -34,7 +34,8 @@ class Controller(QObject):
         self.analysis_active = False
         self.export_start, self.export_end = 0, recording.frame_count-1
         self.optical_parameters = OpticalParameters.from_settings(getattr(viewport, "optical_settings", {}))
-        self.frustum_opacity = .10
+        self.frustum_opacity = .05
+        self.frustum_wall_opacity = .40
         self.current_visibility = None
         self.orbit_enabled = False
         self.orbit_speed = 5.0
@@ -135,7 +136,7 @@ class Controller(QObject):
             recording.valid[:,frame:frame+1], self.optical_parameters))
         self.viewport.optical_parameters = self.optical_parameters
         self.viewport.current_visibility = self.current_visibility
-        self.viewport.set_frame(frame, self.frustum_opacity)
+        self.viewport.set_frame(frame, self.frustum_opacity, self.frustum_wall_opacity)
         self.changed.emit()
 
     @property
@@ -211,6 +212,11 @@ class Controller(QObject):
     def set_frustum_opacity(self, value):
         if not self.job:
             self.frustum_opacity = max(0., min(1., float(value)))
+            self.refresh()
+
+    def set_frustum_wall_opacity(self, value):
+        if not self.job:
+            self.frustum_wall_opacity = max(0., min(1., float(value)))
             self.refresh()
 
     def set_orbit_enabled(self, enabled):

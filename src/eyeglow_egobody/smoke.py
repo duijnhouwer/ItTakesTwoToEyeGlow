@@ -101,7 +101,7 @@ def start_smoke(app,window,output):
                 assert controller.state.frame == 120 and controller.frustum_opacity == .6
                 for p,part in enumerate(window.viewport.parts):
                     np.testing.assert_allclose(part[0].points,controller.recording.joints[p,120])
-                window.frustum_opacity.setValue(.10)
+                window.frustum_opacity.setValue(.05)
                 window.viewport.reset_view()
                 window.viewport.camera.azimuth += 25
                 window.viewport.camera.elevation += 10
@@ -153,7 +153,7 @@ def start_smoke(app,window,output):
                 (output/'smoke-result.json').write_text(json.dumps(report,indent=2))
                 window.grab().save(str(output/'window.png'))
                 controller.seek(0)
-                window.frustum_opacity.setValue(.10)
+                window.frustum_opacity.setValue(.05)
                 window.inspect_participant(0)
                 app.processEvents()
                 window.viewport.render()

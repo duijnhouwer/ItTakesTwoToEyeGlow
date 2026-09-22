@@ -15,8 +15,9 @@ class SettingsEditor(QWidget):
     saved = Signal()
 
     PAIRED_ROWS = {
-        'receiver_fov_left_deg': ('receiver_fov_right_deg', 'Left / Right (deg)'),
-        'receiver_fov_top_deg': ('receiver_fov_bottom_deg', 'Top / Bottom (deg)'),
+        'receiver_fov_left_deg': ('receiver_fov_right_deg', 'Left / Right (deg)', None),
+        'receiver_fov_top_deg': ('receiver_fov_bottom_deg', 'Top / Bottom (deg)', None),
+        'frustum_opacity': ('frustum_wall_opacity', 'Frustum opacity', 'on wall'),
     }
 
     def __init__(self, store, groups=None, parent=None, show_buttons=True,
@@ -77,6 +78,8 @@ class SettingsEditor(QWidget):
                         field.setToolTip(f"Range: {field_spec['min']} to {field_spec['max']}")
                         self.fields[field_name] = field
                         row_layout.addWidget(field, 1)
+                        if field_name == name and pair[2]:
+                            row_layout.addWidget(QLabel(pair[2]))
                     target.addRow(pair[1], row)
                     index += 2
                     continue

@@ -82,7 +82,8 @@ class Viewport(QtInteractor):
         self.optics.set_clip_bounds(self.room_bounds)
         self.stable_actors.extend(self.optics.actors)
         self.caption = self.add_text('Shared optical geometry - Potential visibility',font_size=10,color='white')
-        self.set_frame(0,.10)
+        self.caption.GetTextProperty().SetLineSpacing(1.35)
+        self.set_frame(0,.05,.40)
         self.reset_view()
 
     def set_recording(self, recording):
@@ -97,10 +98,10 @@ class Viewport(QtInteractor):
             skeleton.lines = lines
             roles = recording.metadata.get('roles', ['A', 'B'])
             label.SetInput(f'{"A" if p == 0 else "B"}: {roles[p]}')
-        self.set_frame(0,.10)
+        self.set_frame(0,.05,.40)
         self.reset_view()
 
-    def set_frame(self, frame, opacity):
+    def set_frame(self, frame, opacity, wall_opacity=.40):
         parameters = getattr(self, "optical_parameters", None) or OpticalParameters.from_settings(self.optical_settings)
         subject_colors = (self.optical_settings.get('subject_a_color', '#59c9f1'),
                           self.optical_settings.get('subject_b_color', '#ffb56b'))
@@ -109,7 +110,7 @@ class Viewport(QtInteractor):
         label_visible = (self.optical_settings.get('subject_a_label_visible', True),
                          self.optical_settings.get('subject_b_label_visible', True))
         activity_labels = getattr(self, 'activity_labels', (None, None))
-        glow_color = self.optical_settings.get('eye_glow_color', '#64f59b')
+        glow_color = self.optical_settings.get('eye_glow_color', '#55ffff')
         self.eye_sphere.SetRadius(EYEBALL_RADIUS_MM / 1000)
         for p,(skeleton,glasses,label) in enumerate(self.parts):
             transform = self.recording.heads[p,frame]
@@ -144,12 +145,13 @@ class Viewport(QtInteractor):
                     eye_actor.GetProperty().SetColor(colors[eye] / 255)
                 update_points(glasses,glasses_points(eye_centers,rot,parameters.eye_relief_mm))
             label.SetPosition(*(origin + [0,0,.25]))
-        self.optics.update(self.recording,frame,parameters,self.current_visibility,opacity,
+        self.optics.update(self.recording,frame,parameters,self.current_visibility,opacity,wall_opacity,
                            self.show_frustums,self.show_ui_lines,self.show_axes,self.show_eye_tests,
                            subject_colors=subject_colors, eye_glow_color=glow_color)
-        self.caption.SetText(2,f'{self.recording.name} - Frame {frame+1}/{self.recording.frame_count}'
-                             f' - source {self.recording.frame_ids[frame]}\n'
-                             + visibility_summary(self.current_visibility).replace('—','-'))
+        self.caption.SetText(
+            2,
+            f'{self.recording.name} - Frame {frame+1}/{self.recording.frame_count}\n'
+            + visibility_summary(self.current_visibility))
         # Qt coalesces paints; render explicitly only for export.
         self.update()
 

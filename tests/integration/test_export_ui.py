@@ -2,7 +2,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QWidget, QFileDialog, QDialog, QMessageBox,
-                               QSizePolicy, QGroupBox)
+                               QSizePolicy, QGroupBox, QPushButton)
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, default_filename, choose_file
 from eyeglow_egobody.model.recording import synthetic_recording
 
@@ -68,9 +68,11 @@ class FakeViewport(QWidget):
     def __init__(self,parent,recording):
         super().__init__(parent)
         self.interactor = self
-    def set_frame(self,frame,spread): pass
+    def set_frame(self,frame,spread,wall_spread=.40): pass
     def reset_view(self): pass
     def fit_participants(self): pass
+    def inspect_participant(self, participant, frame):
+        self.inspected = (participant, frame)
     def orbit_by(self,degrees): pass
     def capture_size(self): return (self.width(),self.height())
 
@@ -99,13 +101,35 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert not hasattr(window, 'synthetic_button')
         assert not hasattr(window, 'load_button')
         assert not hasattr(window, 'diagnostics_button')
+        assert window.orbit.isCheckable() and window.orbit.isChecked()
+        assert window.inspect_a_button.isCheckable()
+        assert window.inspect_b_button.isCheckable()
+        assert window.controller.orbit_enabled
+        assert 'Fit optics' not in [
+            child.text() for child in window.controls.findChildren(QPushButton)]
+        window.inspect_a_button.click()
+        assert window.inspect_a_button.isChecked()
+        assert not window.inspect_b_button.isChecked()
+        assert not window.orbit.isChecked()
+        assert not window.controller.orbit_enabled
+        assert window.viewport.inspected[0] == 0
+        window.inspect_b_button.click()
+        assert not window.inspect_a_button.isChecked()
+        assert window.inspect_b_button.isChecked()
+        assert not window.orbit.isChecked()
+        assert window.viewport.inspected[0] == 1
+        window.orbit.click()
+        assert not window.inspect_a_button.isChecked()
+        assert not window.inspect_b_button.isChecked()
+        assert window.orbit.isChecked()
+        assert window.controller.orbit_enabled
         assert [window.smartglasses_dock.isHidden(), window.visualization_dock.isHidden(),
                 window.recordings_dock.isHidden()] == [True, True, True]
         for dock in (window.smartglasses_dock, window.visualization_dock,
                      window.recordings_dock):
             assert dock.titleBarWidget() is not None
             assert dock.titleBarWidget().height() == 0
-        assert window.smartglasses_toggle.text() == '◀ Smartglasses'
+        assert window.smartglasses_toggle.text() == '◀ Geometry'
         assert window.visualization_toggle.text() == 'Visualization ▼'
         assert window.recordings_toggle.text() == 'Playlist and analysis ▶'
         assert not window.smartglasses_toggle.isChecked()
@@ -114,7 +138,7 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         window.smartglasses_toggle.click()
         window.visualization_toggle.click()
         window.recordings_toggle.click()
-        assert window.smartglasses_toggle.text() == '▶ Smartglasses'
+        assert window.smartglasses_toggle.text() == '▶ Geometry'
         assert window.visualization_toggle.text() == 'Visualization ▲'
         assert window.recordings_toggle.text() == 'Playlist and analysis ◀'
         assert window.smartglasses_toggle.isChecked()
@@ -126,7 +150,12 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert not hasattr(window, 'show_frustums')
         assert not hasattr(window, 'show_ui_lines')
         assert not hasattr(window, 'show_axes')
-        assert window.frustum_opacity.value() == .10
+        assert window.frustum_opacity.value() == .05
+        assert window.frustum_wall_opacity.value() == .40
+        assert 'eye_glow_color' not in window.smartglasses_panel.fields
+        assert tuple(window.display_settings_editor.group_fields['visualization'])[-3:] == (
+            'eye_glow_color', 'frustum_opacity', 'frustum_wall_opacity')
+        assert window.display_settings_editor.fields['eye_glow_color'].text() == '#55FFFF'
         assert 'subject_a_activity_visible' not in window.display_settings_editor.fields
         assert 'subject_b_activity_visible' not in window.display_settings_editor.fields
         assert window.display_settings_dialog.width() == round(620 * .70)
@@ -162,9 +191,10 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         clip = SimpleNamespace(
             info=SimpleNamespace(name=window.controller.recording.name, start=0))
         playlist = SimpleNamespace(
-            frame_count=4, duration_s=4/30, clips=[object(), object()],
+            frame_count=4, duration_s=4/30, fps=30, clips=[object(), object()],
             pair_clip_offsets=[0, 2],
             locate=lambda frame: (clip, frame),
+            pair_clip_number=lambda frame: 1 if frame < 2 else 2,
             previous_pair_clip_offset=lambda frame: None if frame == 0 else 0,
             next_pair_clip_offset=lambda frame: 2 if frame < 2 else None)
         window.controller.playlist = playlist
@@ -172,10 +202,12 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         window.sync()
         assert not window.previous_pair_clip_button.isEnabled()
         assert window.next_pair_clip_button.isEnabled()
+        assert window.counter.text() == '1 / 2 activity pair clips · 0.00 / 0.13 s'
         window.controller.state.seek(2)
         window.sync()
         assert window.previous_pair_clip_button.isEnabled()
         assert not window.next_pair_clip_button.isEnabled()
+        assert window.counter.text() == '2 / 2 activity pair clips · 0.07 / 0.13 s'
         assert window.corner(Qt.Corner.TopLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
         assert window.corner(Qt.Corner.BottomLeftCorner) == Qt.DockWidgetArea.LeftDockWidgetArea
         assert window.corner(Qt.Corner.TopRightCorner) == Qt.DockWidgetArea.RightDockWidgetArea

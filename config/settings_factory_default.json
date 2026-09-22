@@ -11,9 +11,17 @@
         "display_name": "A — wearer actions", "kind": "string_list",
         "value": [], "default": [], "factory_default": []
       },
+      "force_all_activities_a": {
+        "display_name": "Force all activities for A", "kind": "boolean",
+        "value": true, "default": true, "factory_default": true
+      },
       "playlist_actions_b": {
         "display_name": "B — interactee actions", "kind": "string_list",
         "value": [], "default": [], "factory_default": []
+      },
+      "force_all_activities_b": {
+        "display_name": "Force all activities for B", "kind": "boolean",
+        "value": true, "default": true, "factory_default": true
       }
     },
     "smartglasses": {
@@ -117,27 +125,9 @@
           "monocular_left",
           "monocular_right"
         ]
-      },
-      "eye_glow_color": {
-        "display_name": "Eye glow color",
-        "kind": "color",
-        "value": "#64f59b",
-        "default": "#64f59b",
-        "factory_default": "#64f59b"
       }
     },
     "visualization": {
-      "frustum_opacity": {
-        "display_name": "Frustum opacity",
-        "value": 0.1,
-        "default": 0.1,
-        "min": 0.0,
-        "max": 1.0,
-        "precision": 2,
-        "step": 0.05,
-        "control": "spinbox",
-        "factory_default": 0.1
-      },
       "subject_a_color": {
         "display_name": "Subject A color",
         "kind": "color",
@@ -179,6 +169,35 @@
         "value": true,
         "default": true,
         "factory_default": true
+      },
+      "eye_glow_color": {
+        "display_name": "Eye glow color",
+        "kind": "color",
+        "value": "#55ffff",
+        "default": "#55ffff",
+        "factory_default": "#55ffff"
+      },
+      "frustum_opacity": {
+        "display_name": "Frustum opacity",
+        "value": 0.05,
+        "default": 0.05,
+        "min": 0.0,
+        "max": 1.0,
+        "precision": 2,
+        "step": 0.05,
+        "control": "spinbox",
+        "factory_default": 0.05
+      },
+      "frustum_wall_opacity": {
+        "display_name": "On wall",
+        "value": 0.4,
+        "default": 0.4,
+        "min": 0.0,
+        "max": 1.0,
+        "precision": 2,
+        "step": 0.05,
+        "control": "spinbox",
+        "factory_default": 0.4
       }
     },
     "receiver_fov": {

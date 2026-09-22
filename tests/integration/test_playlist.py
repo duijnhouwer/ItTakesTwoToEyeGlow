@@ -42,6 +42,7 @@ def test_combined_index_has_no_gaps_or_duplicate_frames(playlist_data):
     # The r1-to-r2 recording boundary starts a new pair clip even though the
     # normalized activity labels remain talk/listen on both sides.
     assert playlist.pair_clip_offsets == [0, 3, 5]
+    assert [playlist.pair_clip_number(frame) for frame in range(8)] == [1, 1, 1, 2, 2, 3, 3, 3]
     assert playlist.previous_pair_clip_offset(0) is None
     assert playlist.previous_pair_clip_offset(2) is None
     assert playlist.previous_pair_clip_offset(4) == 0
@@ -49,6 +50,8 @@ def test_combined_index_has_no_gaps_or_duplicate_frames(playlist_data):
     assert playlist.next_pair_clip_offset(0) == 3
     assert playlist.next_pair_clip_offset(4) == 5
     assert playlist.next_pair_clip_offset(5) is None
+    with pytest.raises(IndexError):
+        playlist.pair_clip_number(8)
 
 
 def test_activity_combinations_ignore_annotation_edges_with_unchanged_labels(tmp_path):
@@ -124,7 +127,7 @@ def test_video_export_concatenates_selected_clips(qt_app, tmp_path, playlist_dat
         def set_recording(self, recording):
             self.recording = recording
 
-        def set_frame(self, frame, _opacity):
+        def set_frame(self, frame, _opacity, _wall_opacity=.40):
             self.frame = frame
             self.rendered.append((self.recording.name, frame))
 

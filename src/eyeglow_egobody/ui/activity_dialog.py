@@ -3,7 +3,9 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
                                QListWidget, QListWidgetItem, QPushButton, QWidget,
                                QDialogButtonBox)
-from eyeglow_egobody.model.playlist import ActivitiesPlaylist, PLAYLIST_KEYS
+from eyeglow_egobody.model.playlist import (ActivitiesPlaylist, PLAYLIST_KEYS,
+                                            PLAYLIST_FORCE_ALL_KEYS,
+                                            playlist_selections)
 
 
 class ActionList(QWidget):
@@ -67,12 +69,14 @@ class ActivitiesPlaylistDialog(QDialog):
             'Include activity pair clips where both participants match their selected actions.'))
         row = QHBoxLayout()
         values = store.values
-        labels = sorted(set(catalog.labels) | set(values[PLAYLIST_KEYS[0]]) | set(values[PLAYLIST_KEYS[1]]))
+        labels = sorted(set(catalog.labels) | set(values[PLAYLIST_KEYS[0]])
+                        | set(values[PLAYLIST_KEYS[1]]))
         self.lists = tuple(ActionList(title, labels) for title in
                            ('A — wearer actions', 'B — interactee actions'))
-        for key, pane in zip(PLAYLIST_KEYS, self.lists):
+        selections = playlist_selections(values, catalog.labels)
+        for selected, pane in zip(selections, self.lists):
             row.addWidget(pane)
-            pane.set_selected(values[key])
+            pane.set_selected(selected)
             pane.changed.connect(self.selection_changed)
         layout.addLayout(row)
         self.summary = QLabel()
@@ -108,6 +112,8 @@ class ActivitiesPlaylistDialog(QDialog):
         self.update_summary()
         values = self.store.values
         values.update(dict(zip(PLAYLIST_KEYS, self.selections())))
+        values.update(dict(zip(PLAYLIST_FORCE_ALL_KEYS, (
+            len(pane.selected()) == pane.items.count() for pane in self.lists))))
         try:
             self.store.save(values)
         except (OSError, ValueError) as exc:
@@ -122,6 +128,7 @@ class ActivitiesPlaylistDialog(QDialog):
         if not self.selection_changed():
             return
         values = dict(zip(PLAYLIST_KEYS, self.selections()))
+        values.update({key: self.store.values[key] for key in PLAYLIST_FORCE_ALL_KEYS})
         if self.save_user_defaults is not None and self.save_user_defaults(values) is False:
             return
         self.status.setText('Saved as new defaults.')
@@ -129,8 +136,9 @@ class ActivitiesPlaylistDialog(QDialog):
     def reset_to_factory(self):
         values = (self.store.factory_values if self.store.factory_path is not None else
                   {key: self.store.specs[key]['factory_default'] for key in PLAYLIST_KEYS})
-        for key, pane in zip(PLAYLIST_KEYS, self.lists):
-            labels = values[key]
+        for key, force_key, pane in zip(PLAYLIST_KEYS, PLAYLIST_FORCE_ALL_KEYS,
+                                        self.lists):
+            labels = self.catalog.labels if values[force_key] else values[key]
             existing = {pane.items.item(i).text() for i in range(pane.items.count())}
             for label in sorted(set(labels) - existing):
                 item = QListWidgetItem(label, pane.items)

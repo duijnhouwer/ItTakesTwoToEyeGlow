@@ -3,10 +3,19 @@ from .visibility import VisibilityState
 
 
 def visibility_summary(result):
+    labels = {
+        VisibilityState.INVALID: 'unavailable',
+        VisibilityState.NONE: 'none',
+        VisibilityState.LEFT_EYE: 'left',
+        VisibilityState.RIGHT_EYE: 'right',
+        VisibilityState.BOTH_EYES: 'both',
+    }
     if result is None:
-        return 'Current frame: INVALID — eye-center data unavailable'
-    return '    '.join(f'{receiver} sees {emitter}: {VisibilityState(int(result.states[i,0])).name}'
-                       for i,(receiver,emitter) in enumerate((('A','B'),('B','A'))))
+        states = (VisibilityState.INVALID, VisibilityState.INVALID)
+    else:
+        states = tuple(VisibilityState(int(result.states[i, 0])) for i in range(2))
+    return '\n'.join(f'{receiver} sees eyeglow: {labels[state]}'
+                     for receiver, state in zip(('A', 'B'), states))
 
 
 def visibility_details(result, parameters):

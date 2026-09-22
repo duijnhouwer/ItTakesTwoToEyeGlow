@@ -3,6 +3,13 @@ from bisect import bisect_right
 from dataclasses import dataclass
 
 PLAYLIST_KEYS = ('playlist_actions_a', 'playlist_actions_b')
+PLAYLIST_FORCE_ALL_KEYS = ('force_all_activities_a', 'force_all_activities_b')
+
+
+def playlist_selections(values, catalog_labels):
+    return tuple(tuple(catalog_labels) if values[force_key] else values[actions_key]
+                 for actions_key, force_key in zip(PLAYLIST_KEYS,
+                                                   PLAYLIST_FORCE_ALL_KEYS))
 
 
 @dataclass(frozen=True)
@@ -56,6 +63,11 @@ class ActivitiesPlaylist:
     def previous_pair_clip_offset(self, frame):
         index = bisect_right(self.pair_clip_offsets, frame) - 1
         return self.pair_clip_offsets[index - 1] if index > 0 else None
+
+    def pair_clip_number(self, frame):
+        if not 0 <= frame < self.frame_count:
+            raise IndexError('Frame outside activities playlist')
+        return bisect_right(self.pair_clip_offsets, frame)
 
     def next_pair_clip_offset(self, frame):
         index = bisect_right(self.pair_clip_offsets, frame)

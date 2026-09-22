@@ -7,6 +7,7 @@
 - When the user suggests an approach, explain its meaningful trade-offs and identify better alternatives when they exist, especially established industry-standard or broadly accepted methods.
 - When multiple reasonable approaches exist, present the viable options, their pros and cons, and a recommendation before breaking ground.
 - Surface likely risks, hidden complexity, data-quality concerns, and downstream consequences early. Be candid but collaborative; explain the reasoning behind disagreements.
+- Keep sibling concepts symmetric in persisted schemas, APIs, and UI names. If proposed names use different qualifiers or structures for equivalent A/B fields, challenge the asymmetry and recommend one parallel convention before implementing it.
 - Do not interpret this guideline as requiring questions before every action. Routine read-only investigation, clearly reversible housekeeping, and small unambiguous changes may proceed directly. Pause for discussion when a choice could materially affect architecture, data interpretation, user experience, cost, or future maintenance.
 
 ## Dataset protection

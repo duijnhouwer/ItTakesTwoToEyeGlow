@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=ItTakesTwoToEyeGlow
+Comment=Paired motion and eye-glow visibility viewer
+Exec=@EXECUTABLE@ --single-instance
+Icon=ittakestwotoeyeglow
+Terminal=false
+Categories=Science;Education;Graphics;
+StartupNotify=true
+StartupWMClass=ItTakesTwoToEyeGlow

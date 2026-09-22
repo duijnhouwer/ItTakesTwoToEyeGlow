@@ -1,10 +1,11 @@
 """Persistent VTK actor state and points, without requiring a display server."""
 from dataclasses import replace
+from types import SimpleNamespace
 import numpy as np
 import pytest
 import pyvista as pv
 from vtkmodules.vtkRenderingCore import vtkActor, vtkPolyDataMapper, vtkRenderer
-from eyeglow_egobody.rendering.optics import OpticalScene
+from eyeglow_egobody.rendering.optics import OpticalScene, wall_footprints
 from eyeglow_egobody.analysis.geometry import build_frustum, waveguide_centers
 from eyeglow_egobody.analysis.visibility import analyze_recording
 from eyeglow_egobody.analysis.diagnostics import visibility_summary, visibility_details
@@ -90,9 +91,18 @@ def test_optical_scene_hides_pass_fail_labels(scene):
             for part in scene.eyes[participant]:
                 assert not part.actors[6].GetVisibility()
                 assert not part.label.GetVisibility()
-        assert ('INVALID' if invalid else 'BOTH_EYES') in visibility_summary(result)
+        assert ('unavailable' if invalid else 'both') in visibility_summary(result)
         details = visibility_details(result,p)
         assert ('unusable' if invalid else 'Emitter L: containment') in details
+
+
+@pytest.mark.parametrize('state, label', [
+    (-1, 'unavailable'), (0, 'none'), (1, 'left'), (2, 'right'), (3, 'both'),
+])
+def test_visibility_summary_uses_reader_facing_lines(state, label):
+    result = SimpleNamespace(states=np.array([[state], [state]]))
+    assert visibility_summary(result) == (
+        f'A sees eyeglow: {label}\nB sees eyeglow: {label}')
 
 
 def test_display_toggles_never_change_analysis(scene):
@@ -120,6 +130,40 @@ def test_frustum_surfaces_are_clipped_by_all_six_room_planes(scene):
                        and hasattr(actor, 'GetMapper'))
 
 
+def test_wall_footprints_cover_every_intersected_room_surface():
+    bounds = (-2.5, 2.5, -2.5, 2.5, 0., 5.)
+    parameters = OpticalParameters(maximum_distance_m=5, diagonal_fov_deg=120)
+    geometry = build_frustum(np.array([0., 0., 1.]), np.eye(3), parameters)
+    footprints = wall_footprints(geometry, bounds)
+    surface_axes = {(axis, round(float(polygon[0, axis]), 6))
+                    for polygon in footprints for axis in range(3)
+                    if np.allclose(polygon[:, axis], polygon[0, axis])}
+    assert (1, 2.5) in surface_axes
+    assert (0, -2.5) in surface_axes
+    assert (0, 2.5) in surface_axes
+    assert (2, 0.0) in surface_axes
+    for polygon in footprints:
+        assert np.all((polygon[:, 0] >= -2.5) & (polygon[:, 0] <= 2.5))
+        assert np.all((polygon[:, 1] >= -2.5) & (polygon[:, 1] <= 2.5))
+        assert np.all((polygon[:, 2] >= 0.) & (polygon[:, 2] <= 5.))
+    short = OpticalParameters(maximum_distance_m=1)
+    assert not wall_footprints(
+        build_frustum(np.array([0., 0., 1.]), np.eye(3), short), bounds)
+
+
+def test_wall_footprint_actor_has_independent_opacity(scene):
+    recording = synthetic_recording()
+    scene.set_clip_bounds((-2.5, 2.5, -2.5, 2.5, 0., 5.))
+    scene.update(recording, 0, OpticalParameters(), None, opacity=.05, wall_opacity=.4)
+    visible_footprints = [part for pair in scene.eyes for part in pair
+                          if part.actors[8].GetVisibility()]
+    assert visible_footprints
+    for part in visible_footprints:
+        assert part.actors[1].GetProperty().GetOpacity() == pytest.approx(.05)
+        assert part.actors[8].GetProperty().GetOpacity() == pytest.approx(.4)
+        assert len(part.wall_footprint.points) >= 3
+
+
 def test_glow_color_fills_patch_and_frustum_while_subject_color_marks_edges(scene):
     recording = synthetic_recording()
     parameters = OpticalParameters()
@@ -133,3 +177,5 @@ def test_glow_color_fills_patch_and_frustum_while_subject_color_marks_edges(scen
                 np.testing.assert_allclose(actor.GetProperty().GetColor(), pv.Color(glow_color).float_rgb)
                 np.testing.assert_allclose(actor.GetProperty().GetEdgeColor(),
                                            pv.Color(subject_colors[participant]).float_rgb)
+            np.testing.assert_allclose(part.actors[8].GetProperty().GetColor(),
+                                       pv.Color(glow_color).float_rgb)

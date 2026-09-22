@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QDialogButtonBox
 from eyeglow_egobody.ui.activity_dialog import ActivitiesPlaylistDialog
 from eyeglow_egobody.analysis.activities import ActivityCatalog
 from eyeglow_egobody.model.panel_settings import SettingsSession, PanelSettings, factory_settings_path
-from eyeglow_egobody.model.playlist import PLAYLIST_KEYS
+from eyeglow_egobody.model.playlist import PLAYLIST_KEYS, PLAYLIST_FORCE_ALL_KEYS
 
 
 def test_playlist_counts_current_defaults_reset_and_reopen(qt_app, tmp_path):
@@ -25,24 +25,32 @@ def test_playlist_counts_current_defaults_reset_and_reopen(qt_app, tmp_path):
         standard = QDialogButtonBox(QDialogButtonBox.StandardButton.Save)
         assert dialog.save_defaults.icon().cacheKey() == standard.button(
             QDialogButtonBox.StandardButton.Save).icon().cacheKey()
-        assert dialog.playlist.frame_count == 0
+        assert dialog.playlist.frame_count == 90
+        assert all(len(pane.selected()) == 3 for pane in dialog.lists)
         assert not hasattr(dialog, 'run')
         dialog.lists[0].set_selected(['casual_chat'])
         dialog.lists[1].select_all(True)
+        current = PanelSettings(session.current_path, factory).values
+        assert current[PLAYLIST_FORCE_ALL_KEYS[0]] is False
+        assert current[PLAYLIST_FORCE_ALL_KEYS[1]] is True
         assert len(dialog.playlist.clips) == 2
         assert dialog.playlist.duration_s == 2
         assert '2 activity pair clips' in dialog.summary.text()
         dialog.lists[1].search.setText('dance')
         assert len(dialog.lists[1].selected()) == 3
         assert PanelSettings(session.current_path, factory).values[PLAYLIST_KEYS[0]] == ['casual_chat']
-        assert PanelSettings(session.user_default_path, factory).values[PLAYLIST_KEYS[0]] == []
+        defaults = PanelSettings(session.user_default_path, factory).values
+        assert defaults[PLAYLIST_KEYS[0]] == []
+        assert defaults[PLAYLIST_FORCE_ALL_KEYS[0]] is True
         dialog.save_as_defaults()
         assert PanelSettings(session.user_default_path, factory).values[PLAYLIST_KEYS[0]] == ['casual_chat']
         dialog.reject()
         assert session.current.values[PLAYLIST_KEYS[0]] == ['casual_chat']
         dialog.reset_to_factory()
-        assert dialog.playlist.frame_count == 0
-        assert session.current.values[PLAYLIST_KEYS[0]] == []
+        assert dialog.playlist.frame_count == 90
+        assert len(dialog.lists[0].selected()) == 3
+        assert session.current.values[PLAYLIST_KEYS[0]] == list(catalog.labels)
+        assert session.current.values[PLAYLIST_FORCE_ALL_KEYS[0]] is True
         assert PanelSettings(session.user_default_path, factory).values[PLAYLIST_KEYS[0]] == ['casual_chat']
         session.clean_close()
         reopened = SettingsSession(factory, tmp_path/'settings', tmp_path/'absent.json')
@@ -50,6 +58,7 @@ def test_playlist_counts_current_defaults_reset_and_reopen(qt_app, tmp_path):
         # Factory reset comes from the document, not a hard-coded empty list.
         document = json.loads(factory.read_text())
         document['settings']['activities_playlist'][PLAYLIST_KEYS[0]]['value'] = ['dance']
+        document['settings']['activities_playlist'][PLAYLIST_FORCE_ALL_KEYS[0]]['value'] = False
         factory.write_text(json.dumps(document))
         store = PanelSettings(reopened.current_path, factory)
         dialog.store = store

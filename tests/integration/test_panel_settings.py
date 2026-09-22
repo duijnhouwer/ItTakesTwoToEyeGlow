@@ -133,6 +133,7 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
     from eyeglow_egobody.model.recording import synthetic_recording
     recording = synthetic_recording()
     from eyeglow_egobody.rendering.materials import eye_sphere_source
+    caption_text = []
     viewport = SimpleNamespace(recording=recording, optical_settings=dict(
                                eye_relief_mm=13,
                                subject_a_label='A: <CURRENT_ACTIVITY>',
@@ -141,7 +142,7 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
                                optics=SimpleNamespace(update=lambda *args, **kwargs: None), current_visibility=None,
                                show_frustums=True, show_ui_lines=True, show_axes=False, show_eye_tests=True,
                                eye_sphere=eye_sphere_source(.012), update=lambda: None,
-                               caption=SimpleNamespace(SetText=lambda *args: None))
+                               caption=SimpleNamespace(SetText=lambda *args: caption_text.append(args[-1])))
     for p in range(2):
         actors = [vtkActor() for _ in range(5)]
         actors[2] = vtkBillboardTextActor3D()
@@ -157,6 +158,10 @@ def test_renderer_updates_and_hides_eye_actors_without_recreating_them():
     Viewport.set_frame(viewport, 120, .35)
     assert viewport.parts[0][2].GetInput() == 'A: talk'
     assert viewport.parts[1][2].GetInput() == 'B: listen'
+    assert caption_text[-1] == (
+        f'{recording.name} - Frame 121/{recording.frame_count}\n'
+        'A sees eyeglow: unavailable\nB sees eyeglow: unavailable')
+    assert 'source' not in caption_text[-1].lower()
     for p in range(2):
         eyes, eye_parts = viewport.eye_parts[p]
         np.testing.assert_allclose(eyes.points, recording.eyes[p,120])
@@ -280,6 +285,11 @@ def test_smartglasses_and_visualization_controls_persist(qt_app, store):
     assert isinstance(dialog.fields['subject_a_label_visible'], QCheckBox)
     assert dialog.fields['subject_a_label'].text() == 'A: <CURRENT_ACTIVITY>'
     assert dialog.fields['subject_b_label'].text() == 'B: <CURRENT_ACTIVITY>'
+    assert tuple(dialog.editor.group_fields['visualization'])[-3:] == (
+        'eye_glow_color', 'frustum_opacity', 'frustum_wall_opacity')
+    assert dialog.fields['eye_glow_color'].text() == '#55FFFF'
+    assert dialog.fields['frustum_opacity'].value() == .05
+    assert dialog.fields['frustum_wall_opacity'].value() == .40
     mode.setCurrentIndex(mode.findData('binocular'))
     dialog.editor._set_color_button(dialog.fields['eye_glow_color'], '#123456')
     dialog.fields['subject_a_label'].setText('Lead')

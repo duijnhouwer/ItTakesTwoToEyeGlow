@@ -7,7 +7,7 @@ def test_source_root():
 
 
 def test_frozen_root_uses_executable_not_internal_module(monkeypatch,tmp_path):
-    executable = tmp_path/'code-repo/dist/EyeGlowEgoBody/EyeGlowEgoBody'
+    executable = tmp_path/'code-repo/dist/ItTakesTwoToEyeGlow/ItTakesTwoToEyeGlow'
     monkeypatch.setattr(runtime_paths.sys,'frozen',True,raising=False)
     monkeypatch.setattr(runtime_paths.sys,'executable',str(executable))
     assert runtime_paths.project_root() == tmp_path/'code-repo'

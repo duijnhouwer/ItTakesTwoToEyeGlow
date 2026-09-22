@@ -4,7 +4,7 @@ import sys
 
 
 def project_root():
-    # Frozen __file__ points into dist/EyeGlowEgoBody/_internal, not src/.
+    # Frozen __file__ points into dist/ItTakesTwoToEyeGlow/_internal, not src/.
     if getattr(sys, 'frozen', False):
         return Path(sys.executable).resolve().parents[2]
     return Path(__file__).resolve().parents[2]
@@ -15,6 +15,12 @@ def settings_resource_path(filename):
     if getattr(sys, 'frozen', False):
         return Path(sys._MEIPASS) / 'config' / filename
     return project_root() / 'config' / filename
+
+
+def icon_resource_path():
+    if getattr(sys, 'frozen', False):
+        return Path(sys._MEIPASS) / 'icons' / 'ittakestwotoeyeglow.png'
+    return Path(__file__).resolve().parent / 'resources' / 'icons' / 'ittakestwotoeyeglow.png'
 
 
 def assets_root():

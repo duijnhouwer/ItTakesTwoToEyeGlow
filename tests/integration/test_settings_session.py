@@ -124,4 +124,22 @@ def test_new_playlist_fields_do_not_reset_existing_optical_settings(paths):
     restored = session(paths)
     assert restored.restore_recovered_settings().values['eye_relief_mm'] == 23
     assert restored.current.values['playlist_actions_a'] == []
+    assert restored.current.values['force_all_activities_a'] is True
     assert PanelSettings(restored.user_default_path, paths[0]).values['eye_relief_mm'] == 19
+
+
+def test_new_playlist_flags_do_not_reset_existing_settings(paths):
+    active = session(paths)
+    active.save_user_defaults({'eye_relief_mm': 19})
+    for path in (active.user_default_path, active.current_path):
+        document = json.loads(path.read_text())
+        group = document['settings']['activities_playlist']
+        del group['force_all_activities_a']
+        del group['force_all_activities_b']
+        path.chmod(0o644)
+        path.write_text(json.dumps(document))
+    restored = session(paths)
+    assert restored.restore_recovered_settings().values['force_all_activities_a'] is True
+    defaults = PanelSettings(restored.user_default_path, paths[0]).values
+    assert defaults['eye_relief_mm'] == 19
+    assert defaults['force_all_activities_b'] is True

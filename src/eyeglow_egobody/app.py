@@ -3,19 +3,22 @@ import argparse
 import os
 from pathlib import Path
 import sys
-from eyeglow_egobody.runtime_paths import project_root, default_dataset, default_models
+from eyeglow_egobody.runtime_paths import (project_root, default_dataset, default_models,
+                                           icon_resource_path)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='EyeGlow EgoBody paired motion playback')
+    parser = argparse.ArgumentParser(description='ItTakesTwoToEyeGlow paired motion playback')
     parser.add_argument('--output-dir',type=Path)
     parser.add_argument('--dataset', type=Path, default=default_dataset())
     parser.add_argument('--model-dir', type=Path, default=os.environ.get('EYEGLOW_MODEL_DIR'))
     parser.add_argument('--synthetic', action='store_true', help='Use the deterministic synthetic fixture')
     parser.add_argument('--smoke-test',action='store_true',help='Exercise GUI and exports, then exit')
+    parser.add_argument('--single-instance', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
     os.environ['QT_API'] = 'pyside6'
     from PySide6.QtCore import QStandardPaths
+    from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication, QMessageBox
     from eyeglow_egobody.export.paths import safe_directory
     from eyeglow_egobody.model.panel_settings import SettingsSession
@@ -24,7 +27,16 @@ def main():
     configure_window_decoration()
     app = QApplication(sys.argv[:1])
     app.setOrganizationName('EyeGlow')
-    app.setApplicationName('EyeGlowEgoBody')
+    app.setApplicationName('ItTakesTwoToEyeGlow')
+    app.setApplicationDisplayName('ItTakesTwoToEyeGlow')
+    app.setDesktopFileName('ittakestwotoeyeglow')
+    app.setWindowIcon(QIcon(str(icon_resource_path())))
+    singleton = None
+    if args.single_instance:
+        from eyeglow_egobody.ui.single_instance import SingleInstance
+        singleton = SingleInstance()
+        if not singleton.start():
+            return 0
     if args.output_dir:
         output = args.output_dir
     elif not getattr(sys,'frozen',False) and (Path(__file__).resolve().parents[2]/'pyproject.toml').exists():
@@ -54,6 +66,8 @@ def main():
         models = {'female': args.model_dir/'SMPLX_FEMALE.npz', 'male': args.model_dir/'SMPLX_MALE.npz'}
     window = MainWindow(output, dataset=None if args.synthetic or args.smoke_test else dataset,
                         model_dir=models, settings_session=settings_session)
+    if singleton is not None:
+        singleton.set_window(window)
     window.show()
     if args.smoke_test:
         from eyeglow_egobody.smoke import start_smoke
@@ -66,7 +80,7 @@ def _choose_recovered_settings(session, message_box_type):
     dialog = message_box_type()
     dialog.setIcon(message_box_type.Icon.Warning)
     dialog.setWindowTitle('Recover settings')
-    dialog.setText('EyeGlow EgoBody did not close properly.')
+    dialog.setText('ItTakesTwoToEyeGlow did not close properly.')
     detail = ('The saved live settings can be restored for this session, or replaced '
               'with your saved defaults or the bundled factory defaults.')
     if session.recovery_error:
