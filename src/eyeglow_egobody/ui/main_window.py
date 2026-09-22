@@ -7,7 +7,7 @@ from PySide6.QtCore import Qt, QSignalBlocker, QSize
 from PySide6.QtWidgets import (QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QLabel,
                                QPushButton,QSlider,QDoubleSpinBox,QComboBox,QCheckBox,
                                QMessageBox,QDialog,QStyle,QDockWidget,QToolButton,
-                               QFileDialog,QProgressBar,QMenu,QSizePolicy,QButtonGroup)
+                               QFileDialog,QProgressBar,QMenu,QSizePolicy)
 from eyeglow_egobody.model.recording import Recording, synthetic_recording
 from eyeglow_egobody.rendering.viewport import Viewport
 from eyeglow_egobody.runtime_paths import default_models
@@ -119,20 +119,17 @@ class MainWindow(QMainWindow):
         camera = QHBoxLayout()
         controls_layout.addLayout(camera)
         button('Reset camera',self.viewport.reset_view,camera)
-        button('Fit participants',self.viewport.fit_participants,camera)
+        button('Fit participants',self.fit_participants,camera)
         self.inspect_a_button = button(
-            'Inspect A', lambda:self.inspect_participant(0), camera)
+            'Track A', lambda:self.track_participant(0), camera)
         self.inspect_b_button = button(
-            'Inspect B', lambda:self.inspect_participant(1), camera)
+            'Track B', lambda:self.track_participant(1), camera)
         self.orbit = QPushButton('Orbit')
         self.orbit.setToolTip('Automatically orbit around world Z, including while playback is paused.')
-        self.orbit.toggled.connect(self.controller.set_orbit_enabled)
+        self.orbit.toggled.connect(self._set_orbit)
         camera.addWidget(self.orbit)
-        self.view_mode_buttons = QButtonGroup(self)
-        self.view_mode_buttons.setExclusive(True)
         for mode_button in (self.inspect_a_button, self.inspect_b_button, self.orbit):
             mode_button.setCheckable(True)
-            self.view_mode_buttons.addButton(mode_button)
         self.orbit_speed = QDoubleSpinBox()
         self.orbit_speed.setRange(-360,360)
         self.orbit_speed.setDecimals(1)
@@ -337,9 +334,35 @@ class MainWindow(QMainWindow):
         self.display_settings_dialog.raise_()
         self.display_settings_dialog.activateWindow()
 
+    def _set_orbit(self, enabled):
+        if enabled:
+            self.inspect_a_button.setChecked(False)
+            self.inspect_b_button.setChecked(False)
+            self.controller.set_tracked_participant(None)
+        self.controller.set_orbit_enabled(enabled)
+
+    def track_participant(self, participant):
+        selected = self.inspect_a_button if participant == 0 else self.inspect_b_button
+        other = self.inspect_b_button if participant == 0 else self.inspect_a_button
+        if selected.isChecked():
+            other.setChecked(False)
+            self.orbit.setChecked(False)
+            self.controller.set_tracked_participant(participant)
+        else:
+            self.controller.set_tracked_participant(None)
+            self.viewport.fit_participants()
+
     def inspect_participant(self, participant):
-        (self.inspect_a_button if participant == 0 else self.inspect_b_button).setChecked(True)
-        self.viewport.inspect_participant(participant,self.controller.source_frame)
+        """Select participant tracking for callers outside the button rail."""
+        selected = self.inspect_a_button if participant == 0 else self.inspect_b_button
+        selected.setChecked(True)
+        self.track_participant(participant)
+
+    def fit_participants(self):
+        self.inspect_a_button.setChecked(False)
+        self.inspect_b_button.setChecked(False)
+        self.controller.set_tracked_participant(None)
+        self.viewport.fit_participants()
 
     def _seek_previous_pair_clip(self):
         playlist = self.controller.playlist

@@ -47,7 +47,8 @@ Use `--synthetic` to run the deterministic demo without data or models. Windows 
 - **Frustums**, **UI lines**, **Local axes**, and **Eye tests** toggle inspection
   layers. **Frustum opacity** changes only presentation. Axes use red/right,
   green/forward, blue/up. There is no placeholder spread control anymore.
-- **Inspect A/B** stops camera orbit and frames that person's glasses closely.
+- **Track A/B** stops camera orbit and keeps that person's glasses framed as playback advances.
+  Press the active Track button again to return to the fitted participant view.
   **Fit optics** frames the full active volumes; **Fit participants** returns to
   a view of the people.
 - Receiving-eye rings use green/pass, red/fail, gray/invalid. **Eye-test details**

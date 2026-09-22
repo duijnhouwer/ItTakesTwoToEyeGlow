@@ -38,6 +38,7 @@ class Controller(QObject):
         self.frustum_wall_opacity = .40
         self.current_visibility = None
         self.orbit_enabled = False
+        self.tracked_participant = None
         self.orbit_speed = 5.0
         self.orbit_suspended = False
         self.writer = ImageWriter()
@@ -137,6 +138,8 @@ class Controller(QObject):
         self.viewport.optical_parameters = self.optical_parameters
         self.viewport.current_visibility = self.current_visibility
         self.viewport.set_frame(frame, self.frustum_opacity, self.frustum_wall_opacity)
+        if self.tracked_participant is not None:
+            self.viewport.inspect_participant(self.tracked_participant, frame)
         self.changed.emit()
 
     @property
@@ -222,6 +225,13 @@ class Controller(QObject):
     def set_orbit_enabled(self, enabled):
         self.orbit_enabled = bool(enabled)
         self.last = monotonic()
+
+    def set_tracked_participant(self, participant):
+        if participant not in (None, 0, 1):
+            raise ValueError('Tracked participant must be A, B, or None.')
+        self.tracked_participant = participant
+        if participant is not None:
+            self.viewport.inspect_participant(participant, self.source_frame)
 
     def set_orbit_speed(self, speed):
         self.orbit_speed = float(speed)

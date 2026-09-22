@@ -68,9 +68,10 @@ class FakeViewport(QWidget):
     def __init__(self,parent,recording):
         super().__init__(parent)
         self.interactor = self
+        self.fit_count = 0
     def set_frame(self,frame,spread,wall_spread=.40): pass
     def reset_view(self): pass
-    def fit_participants(self): pass
+    def fit_participants(self): self.fit_count += 1
     def inspect_participant(self, participant, frame):
         self.inspected = (participant, frame)
     def orbit_by(self,degrees): pass
@@ -104,6 +105,8 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert window.orbit.isCheckable() and window.orbit.isChecked()
         assert window.inspect_a_button.isCheckable()
         assert window.inspect_b_button.isCheckable()
+        assert window.inspect_a_button.text() == 'Track A'
+        assert window.inspect_b_button.text() == 'Track B'
         assert window.controller.orbit_enabled
         assert 'Fit optics' not in [
             child.text() for child in window.controls.findChildren(QPushButton)]
@@ -118,11 +121,18 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert window.inspect_b_button.isChecked()
         assert not window.orbit.isChecked()
         assert window.viewport.inspected[0] == 1
+        window.inspect_b_button.click()
+        assert not window.inspect_b_button.isChecked()
+        assert window.controller.tracked_participant is None
+        assert window.viewport.fit_count == 1
         window.orbit.click()
         assert not window.inspect_a_button.isChecked()
         assert not window.inspect_b_button.isChecked()
         assert window.orbit.isChecked()
         assert window.controller.orbit_enabled
+        window.orbit.click()
+        assert not window.orbit.isChecked()
+        assert not window.controller.orbit_enabled
         assert [window.smartglasses_dock.isHidden(), window.visualization_dock.isHidden(),
                 window.recordings_dock.isHidden()] == [True, True, True]
         for dock in (window.smartglasses_dock, window.visualization_dock,
