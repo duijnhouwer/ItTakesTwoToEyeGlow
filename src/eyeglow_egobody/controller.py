@@ -139,7 +139,7 @@ class Controller(QObject):
         self.viewport.current_visibility = self.current_visibility
         self.viewport.set_frame(frame, self.frustum_opacity, self.frustum_wall_opacity)
         if self.tracked_participant is not None:
-            self.viewport.inspect_participant(self.tracked_participant, frame)
+            self.viewport.track_participant(self.tracked_participant, frame)
         self.changed.emit()
 
     @property
@@ -229,9 +229,12 @@ class Controller(QObject):
     def set_tracked_participant(self, participant):
         if participant not in (None, 0, 1):
             raise ValueError('Tracked participant must be A, B, or None.')
+        previous = self.tracked_participant
         self.tracked_participant = participant
         if participant is not None:
             self.viewport.inspect_participant(participant, self.source_frame)
+        elif previous is not None:
+            self.viewport.stop_tracking()
 
     def set_orbit_speed(self, speed):
         self.orbit_speed = float(speed)

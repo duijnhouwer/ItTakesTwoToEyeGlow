@@ -39,6 +39,7 @@ class Viewport(QtInteractor):
         self.show_ui_lines = False
         self.show_axes = False
         self.show_eye_tests = True
+        self._tracked_eye_center = None
         self.participant_actors = []
         self.eye_parts = []
         self.eye_sphere = eye_sphere_source(EYEBALL_RADIUS_MM / 1000)
@@ -88,6 +89,7 @@ class Viewport(QtInteractor):
 
     def set_recording(self, recording):
         self.recording = recording
+        self._tracked_eye_center = None
         center, self.room_bounds = room_geometry(recording)
         self.ground.points = pv.Plane(center=center, i_size=ROOM_SIZE_M, j_size=ROOM_SIZE_M).points
         self.room.points = pv.Box(bounds=self.room_bounds).points
@@ -178,17 +180,44 @@ class Viewport(QtInteractor):
         self.reset_camera(bounds=bounds,render=False)
         self.update()
 
-    def inspect_participant(self, participant, frame):
+    def _participant_eye_center(self, participant, frame):
         transform = self.recording.heads[participant,frame]
         if not self.recording.valid[participant,frame] or not valid_transform(transform):
-            return
+            return None
         center = transform[:3,3].copy()
         if self.recording.eyes is not None and np.isfinite(self.recording.eyes[participant,frame]).all():
             center = self.recording.eyes[participant,frame].mean(axis=0)
+        return center
+
+    def inspect_participant(self, participant, frame):
+        center = self._participant_eye_center(participant, frame)
+        if center is None:
+            return
+        transform = self.recording.heads[participant,frame]
         position = center + transform[:3,:3] @ np.array([.35,.65,.25])
         self.camera_position = [position,center,(0,0,1)]
+        self._tracked_eye_center = center.copy()
         self.reset_camera_clipping_range()
         self.update()
+
+    def track_participant(self, participant, frame):
+        """Follow the eye while preserving the user-edited camera-to-eye vector."""
+        center = self._participant_eye_center(participant, frame)
+        if center is None:
+            return
+        if self._tracked_eye_center is None:
+            self.inspect_participant(participant, frame)
+            return
+        offset = np.asarray(self.camera.position) - self._tracked_eye_center
+        self.camera.position = center + offset
+        self.camera.focal_point = center
+        self.camera.up = (0,0,1)
+        self._tracked_eye_center = center.copy()
+        self.reset_camera_clipping_range()
+        self.update()
+
+    def stop_tracking(self):
+        self._tracked_eye_center = None
 
     def reset_view(self):
         self.camera_position = [(4,-6,3.4),(0,0,.9),(0,0,1)]

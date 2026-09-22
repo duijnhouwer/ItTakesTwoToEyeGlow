@@ -275,11 +275,18 @@ class MainWindow(QMainWindow):
         self.controller.changed.connect(self.sync)
         self.controller.status.connect(self.statusBar().showMessage)
         self.controller.export_failed.connect(lambda message: QMessageBox.warning(self, 'Export failed', message))
+        self.visualization_dock.show()
+        self._sync_panel_buttons()
         self.statusBar().showMessage('Choose where to save each screenshot or video.')
         self.statusBar().hide()
+        self.controller.state.playing = True
         self.controller.refresh()
         if dataset:
             self.controller.discover_recordings(dataset)
+            # Discovery has no playable frames yet, but the requested startup
+            # state remains active and is reflected by the playback control.
+            self.controller.state.playing = True
+            self.controller.changed.emit()
 
     def _make_dock(self, title, widget, area, object_name):
         dock = QDockWidget(title,self)

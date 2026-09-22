@@ -74,6 +74,8 @@ class FakeViewport(QWidget):
     def fit_participants(self): self.fit_count += 1
     def inspect_participant(self, participant, frame):
         self.inspected = (participant, frame)
+    def track_participant(self, participant, frame): pass
+    def stop_tracking(self): pass
     def orbit_by(self,degrees): pass
     def capture_size(self): return (self.width(),self.height())
 
@@ -108,6 +110,11 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert window.inspect_a_button.text() == 'Track A'
         assert window.inspect_b_button.text() == 'Track B'
         assert window.controller.orbit_enabled
+        assert window.controller.state.playing
+        assert window.play.accessibleName() == 'Pause'
+        assert not window.visualization_dock.isHidden()
+        assert window.visualization_toggle.isChecked()
+        assert window.visualization_toggle.text() == 'Visualization ▲'
         assert 'Fit optics' not in [
             child.text() for child in window.controls.findChildren(QPushButton)]
         window.inspect_a_button.click()
@@ -133,6 +140,7 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         window.orbit.click()
         assert not window.orbit.isChecked()
         assert not window.controller.orbit_enabled
+        window.visualization_toggle.click()
         assert [window.smartglasses_dock.isHidden(), window.visualization_dock.isHidden(),
                 window.recordings_dock.isHidden()] == [True, True, True]
         for dock in (window.smartglasses_dock, window.visualization_dock,

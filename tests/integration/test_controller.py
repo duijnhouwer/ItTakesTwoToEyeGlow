@@ -9,6 +9,7 @@ from eyeglow_egobody.model.recording import synthetic_recording
 class FakeViewport:
     def __init__(self):
         self.inspected = []
+        self.tracked = []
 
     def set_frame(self, frame, spread, wall_spread=.40):
         self.frame, self.frustum_opacity = frame, spread
@@ -16,6 +17,12 @@ class FakeViewport:
 
     def inspect_participant(self, participant, frame):
         self.inspected.append((participant, frame))
+
+    def track_participant(self, participant, frame):
+        self.tracked.append((participant, frame))
+
+    def stop_tracking(self):
+        self.tracking_stopped = True
 
     def capture_size(self):
         return (16,16)
@@ -80,10 +87,11 @@ def test_tracking_reframes_participant_on_each_displayed_frame(controller):
     controller.set_tracked_participant(1)
     assert controller.viewport.inspected == [(1, 0)]
     controller.seek(12)
-    assert controller.viewport.inspected[-1] == (1, 12)
+    assert controller.viewport.tracked == [(1, 12)]
     controller.set_tracked_participant(None)
+    assert controller.viewport.tracking_stopped
     controller.seek(13)
-    assert controller.viewport.inspected[-1] == (1, 12)
+    assert controller.viewport.tracked == [(1, 12)]
 
 
 def finish_job(controller):
