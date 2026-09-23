@@ -108,10 +108,10 @@ PYINSTALLER_CONFIG_DIR="$PWD/.runtime/pyinstaller" .venv/bin/python -m PyInstall
 ./dist/ItTakesTwoToEyeGlow/ItTakesTwoToEyeGlow
 ```
 
-The packaged executable contains a snapshot of the Python source. Rebuild it after
-source changes, especially changes to the settings format: the source app and
-packaged app read the same `config/settings_panel.json`. Validate the rebuilt
-executable with the packaged smoke command above before handing off a change.
+The packaged executable contains snapshots of the Python source and
+`config/settings_factory_default.json`. Rebuild it after source or settings-format
+changes, then validate the rebuilt executable with the packaged smoke command
+above before handing off a change.
 
 ### Linux application launcher
 
@@ -158,14 +158,10 @@ and uses the [imageio-ffmpeg bundled encoder](https://github.com/imageio/imageio
 ### Eye placement settings
 
 **File → Settings ...** edits eyeball radius (default 12 mm) and eye relief
-(default 13 mm). Save persists changes to `config/settings_panel.json` and updates
-the current view. Cancel discards edits. The JSON also defines each setting's
-friendly display name, default, minimum, maximum, and decimal precision; only
-current values appear as editable fields in the dialog. Each parameter also has
-a `factory_default`: **Factory Reset** restores these values in the dialog
-(12 mm eyeball radius, 13 mm eye relief). Save applies and persists the reset;
-Cancel discards it. Source and the current
-repository-built package share this external file. Keep it with the repository.
+(default 13 mm). Changes apply to `settings_active_session.json`; **Save as new defaults**
+promotes them to the per-user `settings_user_default.json`. Cancel discards staged
+edits. `config/settings_factory_default.json` defines the immutable schema,
+metadata, and factory values used by **Factory Reset**.
 
 Participant-colored spheres mark reconstructed SMPL-X eye centers, using the
 configured eyeball radius. Frames use matte white Wayfarer-style rims and temples.
@@ -181,7 +177,7 @@ for A (camera wearer) and B (interactee). Search either checklist and use Select
 all or Clear across the full list. Both participants must match; `<undefined>`
 selects unannotated time. The editor shows the matching paired clip count and
 combined duration across all recordings. Selections are written immediately to
-`settings_current.json` and remain active after closing the editor. **Save as new
+`settings_active_session.json` and remain active after closing the editor. **Save as new
 defaults** promotes only the playlist choices to `settings_user_default.json`;
 **Factory Reset** reads the playlist values from `settings_factory_default.json`
 (currently neither participant has actions selected).

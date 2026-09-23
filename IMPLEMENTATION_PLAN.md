@@ -772,8 +772,8 @@ criteria above extend them with explicit activity scope and reproducibility.
 
 During visual review, the owner requested SMPL-X eye-center point markers and
 placeholder glasses positioned by eyeball radius plus eye relief, with defaults
-12 mm and 13 mm. The owner also requested `config/settings_panel.json` containing
-values, display names, min/max, and precision, and a functional File → Settings ...
+12 mm and 13 mm. The owner also requested a settings document containing values,
+display names, min/max, and precision, and a functional File → Settings ...
 dialog for editing values. This small placement/settings increment is authorized
 before Phase 3; final optical geometry and visibility analysis retain their later
 phase scope. See the latest [Phase 2 validation note](docs/PHASE2_DATA_INSPECTION.md).
@@ -817,8 +817,8 @@ no new floor-estimation implementation is authorized by this deferral.
 
 ## Authorized Phase 3 waveguide settings — 2026-09-18
 
-The owner requested Phase 3 implementation plus editable waveguide parameters in
-`config/settings_panel.json`, grouped under `settings.waveguide`. Defaults are a
+The owner requested Phase 3 implementation plus editable waveguide parameters,
+grouped under `settings.waveguide`. Defaults are a
 20 × 20 mm eyebox expander and a 20° diagonal FOV with horizontal/vertical angular
 ratio 1:1. Two center offsets describe right/up displacement relative to each
 lens center, defaulting to zero. The UI line replaces the name chief ray; its

@@ -6,7 +6,7 @@ modified by this implementation or its synthetic review.
 
 ## Settings and scope
 
-`config/settings_panel.json` now contains a `settings.waveguide` group. File →
+The settings schema contains a `settings.waveguide` group. File →
 Settings exposes the group through simple edit fields, including:
 
 | Parameter | Factory default | Meaning |

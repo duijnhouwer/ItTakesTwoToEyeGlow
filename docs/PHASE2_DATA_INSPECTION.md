@@ -278,11 +278,10 @@ or final calibrated optical geometry is implemented. Temple arms follow the
 frames. Lens rectangles are 50 mm wide by 60 mm high, centered on their respective
 eyes; their size and temple dimensions remain placeholders.
 
-`config/settings_panel.json` stores schema version, display names, current/default
-values, min/max, and decimal precision. **File → Settings ...** generates text
-fields from these definitions. Save validates and atomically persists values,
-then refreshes current geometry; Cancel leaves values unchanged. The JSON metadata
-is not exposed as editable settings. Values are in millimeters: radius defaults
+The settings schema stores display names, defaults, min/max, and decimal precision.
+**File → Settings ...** generates fields from these definitions. Save validates and
+atomically persists values, then refreshes current geometry; Cancel leaves values
+unchanged. The JSON metadata is not exposed as editable settings. Values are in millimeters: radius defaults
 to 12 (range 1–30), relief to 13 (range 0–100), both with one decimal place.
 These ranges are application input limits, not anatomical assertions. Source and
 repository-built desktop runs share this external config file.
@@ -378,8 +377,7 @@ frames 0, 430, and 1289. Captures/report: `.runtime/min-floor/`.
 
 ### Factory Reset in settings — 2026-09-18
 
-Every parameter now includes an explicit validated `factory_default` in
-`config/settings_panel.json`: 12 mm for eyeball radius and 13 mm for eye relief.
+The immutable factory settings define 12 mm for eyeball radius and 13 mm for eye relief.
 The Settings dialog's **Factory Reset** button fills every field from that
 parameter's factory value using its configured precision and clears validation
 errors. Reset is staged: Save persists/applies it, while Cancel leaves the current

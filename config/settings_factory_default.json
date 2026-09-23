@@ -36,21 +36,21 @@
       },
       "expander_width_mm": {
         "display_name": "Eyebox expander width (mm)",
-        "value": 20.0,
-        "default": 20,
+        "value": 18.972,
+        "default": 18.972,
         "min": 0.1,
         "max": 100,
-        "precision": 2,
-        "factory_default": 20
+        "precision": 3,
+        "factory_default": 18.972
       },
       "expander_height_mm": {
         "display_name": "Eyebox expander height (mm)",
-        "value": 20.0,
-        "default": 20,
+        "value": 21.253,
+        "default": 21.253,
         "min": 0.1,
         "max": 100,
-        "precision": 2,
-        "factory_default": 20
+        "precision": 3,
+        "factory_default": 21.253
       },
       "expander_offset_right_mm": {
         "display_name": "Center offset right (mm)",
@@ -90,30 +90,30 @@
       },
       "ui_line_azimuth_deg": {
         "display_name": "UI line azimuth (deg)",
-        "value": 0.0,
-        "default": 0,
+        "value": 8.0,
+        "default": 8,
         "min": -88,
         "max": 88,
         "precision": 2,
-        "factory_default": 0
+        "factory_default": 8
       },
       "ui_line_elevation_deg": {
         "display_name": "UI line elevation (deg)",
-        "value": 0.0,
-        "default": 0,
+        "value": -6.0,
+        "default": -6,
         "min": -88,
         "max": 88,
         "precision": 2,
-        "factory_default": 0
+        "factory_default": -6
       },
       "maximum_distance_m": {
         "display_name": "Maximum analysis distance (m)",
-        "value": 5.0,
-        "default": 5,
+        "value": 6.0,
+        "default": 6,
         "min": 0.01,
         "max": 100,
         "precision": 2,
-        "factory_default": 5
+        "factory_default": 6
       },
       "display_mode": {
         "display_name": "Display mode",

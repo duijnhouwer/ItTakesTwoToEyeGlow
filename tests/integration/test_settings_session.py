@@ -4,7 +4,7 @@ import stat
 import pytest
 
 from eyeglow_egobody.model.panel_settings import (
-    PanelSettings, SettingsSession, factory_settings_path, settings_path,
+    PanelSettings, SettingsSession, factory_settings_path,
 )
 from eyeglow_egobody.ui.settings_dialog import SettingsEditor
 
@@ -13,35 +13,22 @@ from eyeglow_egobody.ui.settings_dialog import SettingsEditor
 def paths(tmp_path):
     factory = tmp_path / 'settings_factory_default.json'
     factory.write_bytes(factory_settings_path().read_bytes())
-    return factory, tmp_path / 'user', tmp_path / 'settings_panel.json'
+    return factory, tmp_path / 'user'
 
 
 def session(paths):
-    factory, user_directory, legacy = paths
-    return SettingsSession(factory_path=factory, user_directory=user_directory, legacy_path=legacy)
+    factory, user_directory = paths
+    return SettingsSession(factory_path=factory, user_directory=user_directory)
 
 
 def test_fresh_install_creates_matching_user_and_current_documents(paths):
     fresh = session(paths)
     factory_values = PanelSettings(paths[0]).values
     assert fresh.recovery_pending is False
+    assert fresh.current_path.name == 'settings_active_session.json'
     assert fresh.current.values == factory_values
     assert PanelSettings(fresh.user_default_path, paths[0]).values == factory_values
     assert not (fresh.current_path.stat().st_mode & stat.S_IWUSR)
-
-
-def test_legacy_settings_migrate_once_to_user_defaults(paths):
-    factory, _, legacy = paths
-    legacy.write_bytes(settings_path().read_bytes())
-    old = PanelSettings(legacy)
-    old.save({**old.values, 'eye_relief_mm': 18})
-    migrated = session(paths)
-    assert migrated.current.values['eye_relief_mm'] == 18
-    migrated.save_user_defaults({'eye_relief_mm': 19})
-    old.save({**old.values, 'eye_relief_mm': 20})
-    migrated.clean_close()
-    next_session = session(paths)
-    assert next_session.current.values['eye_relief_mm'] == 19
 
 
 def test_live_current_and_group_default_are_independent(paths):

@@ -9,7 +9,7 @@ from eyeglow_egobody.ui.input_data_dialog import InputDataDialog, FIELDS, defaul
 def session(tmp_path):
     factory = tmp_path/'factory.json'
     factory.write_bytes(factory_settings_path().read_bytes())
-    return SettingsSession(factory, tmp_path/'settings', tmp_path/'legacy.json')
+    return SettingsSession(factory, tmp_path/'settings')
 
 
 def test_default_paths_apply_reset_and_save_defaults(qt_app, session, tmp_path):

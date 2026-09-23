@@ -19,7 +19,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     configure_window_decoration()
     app = QApplication([])
-    session = SettingsSession(factory_settings_path(), output/'settings', output/'no-legacy.json')
+    session = SettingsSession(factory_settings_path(), output/'settings')
     if session.recovery_pending:
         session.use_factory_defaults()
     window = MainWindow(output, settings_session=session)

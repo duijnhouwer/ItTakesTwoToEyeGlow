@@ -2,15 +2,15 @@ import json
 import numpy as np
 import pytest
 from PySide6.QtWidgets import QDialog, QGroupBox
-from eyeglow_egobody.model.panel_settings import PanelSettings, settings_path
+from eyeglow_egobody.model.panel_settings import PanelSettings, factory_settings_path
 from eyeglow_egobody.model.glasses import glasses_points, GLASSES_POINT_COUNT, REAR_RIM_INDICES
 from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
 
 
 @pytest.fixture
 def store(tmp_path):
-    path = tmp_path/'settings_panel.json'
-    path.write_bytes(settings_path().read_bytes())
+    path = tmp_path/'settings_factory_default.json'
+    path.write_bytes(factory_settings_path().read_bytes())
     store = PanelSettings(path)
     store.save({key: spec["factory_default"] for key, spec in store.specs.items()})
     return store
@@ -243,10 +243,18 @@ def test_waveguide_group_edits_persist_and_derive_fov(qt_app, store):
     dialog = SettingsDialog(loaded)
     dialog.factory_reset.click()
     dialog.accept()
-    assert loaded.optical_parameters.expander_width_mm == 20
-    assert loaded.optical_parameters.diagonal_fov_deg == 20
-    assert loaded.optical_parameters.horizontal_vertical_fov_ratio == 1
-    assert loaded.optical_parameters.display_mode == 'monocular_right'
+    reset = loaded.optical_parameters
+    assert reset.eye_relief_mm == 13
+    assert reset.expander_width_mm == 18.972
+    assert reset.expander_height_mm == 21.253
+    assert reset.expander_offset_right_mm == 0
+    assert reset.expander_offset_up_mm == 0
+    assert reset.diagonal_fov_deg == 20
+    assert reset.horizontal_vertical_fov_ratio == 1
+    assert reset.ui_line_azimuth_deg == 8
+    assert reset.ui_line_elevation_deg == -6
+    assert reset.maximum_distance_m == 6
+    assert reset.display_mode == 'monocular_right'
 
 
 @pytest.mark.parametrize('key,value', [('expander_width_mm','0'),('diagonal_fov_deg','180'),

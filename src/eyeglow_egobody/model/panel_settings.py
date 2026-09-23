@@ -7,17 +7,12 @@ import os
 from pathlib import Path
 import re
 import tempfile
-from eyeglow_egobody.runtime_paths import project_root, settings_resource_path
+from eyeglow_egobody.runtime_paths import settings_resource_path
 from .parameters import OpticalParameters
 
 FACTORY_FILENAME = 'settings_factory_default.json'
 USER_DEFAULT_FILENAME = 'settings_user_default.json'
-CURRENT_FILENAME = 'settings_current.json'
-
-
-def settings_path():
-    """Legacy project settings path, read once when upgrading an installation."""
-    return project_root() / 'config' / 'settings_panel.json'
+ACTIVE_SESSION_FILENAME = 'settings_active_session.json'
 
 
 def factory_settings_path():
@@ -145,7 +140,7 @@ class PanelSettings:
     """A mutable document validated against an optional immutable factory schema."""
 
     def __init__(self, path=None, factory_path=None, read_only=False):
-        self.path = Path(path) if path is not None else settings_path()
+        self.path = Path(path) if path is not None else factory_settings_path()
         self.factory_path = Path(factory_path) if factory_path is not None else None
         self.read_only = read_only
         self.document = _read_document(self.path)
@@ -213,12 +208,11 @@ class PanelSettings:
 class SettingsSession:
     """Owns per-launch Current settings and durable User Default settings."""
 
-    def __init__(self, factory_path=None, user_directory=None, legacy_path=None):
+    def __init__(self, factory_path=None, user_directory=None):
         self.factory_path = Path(factory_path) if factory_path is not None else factory_settings_path()
         self.user_directory = Path(user_directory) if user_directory is not None else user_settings_directory()
         self.user_default_path = self.user_directory / USER_DEFAULT_FILENAME
-        self.current_path = self.user_directory / CURRENT_FILENAME
-        self.legacy_path = Path(legacy_path) if legacy_path is not None else settings_path()
+        self.current_path = self.user_directory / ACTIVE_SESSION_FILENAME
         self.factory = PanelSettings(self.factory_path)
         # Initialize newly introduced state without discarding the
         # user's unrelated optical/display settings in an existing document.
@@ -271,13 +265,8 @@ class SettingsSession:
                 return
             except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
                 pass
-        values = self.factory.values
-        if self.legacy_path.exists():
-            try:
-                values = PanelSettings(self.legacy_path).values
-            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
-                pass
-        PanelSettings.write_values(self.user_default_path, self.factory_path, values)
+        PanelSettings.write_values(
+            self.user_default_path, self.factory_path, self.factory.values)
 
     def _start_with(self, values):
         PanelSettings.write_values(self.current_path, self.factory_path, values, read_only=True)

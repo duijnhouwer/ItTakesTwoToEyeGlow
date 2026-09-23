@@ -17,7 +17,7 @@ def test_playlist_counts_current_defaults_reset_and_reopen(qt_app, tmp_path):
     info = SimpleNamespace(name='r', start=0, end=90, body_indices=(0,1))
     factory = tmp_path/'factory.json'
     factory.write_bytes(factory_settings_path().read_bytes())
-    session = SettingsSession(factory, tmp_path/'settings', tmp_path/'absent.json')
+    session = SettingsSession(factory, tmp_path/'settings')
     dialog = ActivitiesPlaylistDialog([info], catalog, session.current, session.save_user_defaults)
     try:
         assert dialog.status.text() == ''
@@ -53,7 +53,7 @@ def test_playlist_counts_current_defaults_reset_and_reopen(qt_app, tmp_path):
         assert session.current.values[PLAYLIST_FORCE_ALL_KEYS[0]] is True
         assert PanelSettings(session.user_default_path, factory).values[PLAYLIST_KEYS[0]] == ['casual_chat']
         session.clean_close()
-        reopened = SettingsSession(factory, tmp_path/'settings', tmp_path/'absent.json')
+        reopened = SettingsSession(factory, tmp_path/'settings')
         assert reopened.current.values[PLAYLIST_KEYS[0]] == ['casual_chat']
         # Factory reset comes from the document, not a hard-coded empty list.
         document = json.loads(factory.read_text())
