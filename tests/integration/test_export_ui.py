@@ -98,6 +98,9 @@ def test_compact_window_uses_three_retractable_panels(qt_app,monkeypatch,tmp_pat
         assert window.analyze_playlist_button.text() == 'Analyze activities playlist ...'
         assert window.analyze_playlist_button.parent() is window.recordings_panel
         assert not window.analyze_playlist_button.isEnabled()
+        assert window.analyze_visibility_button.text() == 'Analyze visibility ...'
+        assert window.analyze_visibility_button.parent() is window.recordings_panel
+        assert window.analyze_visibility_button.isEnabled()
         assert window.models_button.text() == 'Select input data ...'
         assert not hasattr(window, 'recordings')
         assert not hasattr(window, 'metadata_label')
@@ -270,11 +273,44 @@ def test_main_window_dialog_cancel_and_screenshot(qt_app,monkeypatch,tmp_path):
         window.sync()
         assert not window.screenshot_button.isEnabled()
         assert not window.video_button.isEnabled()
+        assert not window.analyze_visibility_button.isEnabled()
         controller.job = None
         window.sync()
         assert window.screenshot_button.isEnabled()
         assert window.video_button.isEnabled()
         assert default_filename(controller.recording,False) == Path.home()/'Pictures'/'synthetic_motion.png'
+    finally:
+        window.close()
+
+
+def test_analyze_visibility_button_loads_selected_analysis(qt_app, monkeypatch, tmp_path):
+    import json
+    from eyeglow_egobody.ui import main_window, visibility_report
+    monkeypatch.setattr(main_window, 'Viewport', FakeViewport)
+    path = tmp_path / 'activity-analysis.jsonl'
+    direction = dict(visible_duration_s=2, usable_duration_s=3,
+                     excluded_invalid_duration_s=1)
+    path.write_text('\n'.join(json.dumps(row) for row in [
+        dict(record_type='metadata', schema_version=1,
+             analysis_version='activity-eyeglow-v1'),
+        dict(record_type='segment', a_sees_b_eyeglow=direction,
+             b_sees_a_eyeglow=direction)]) + '\n')
+    picker_arguments = []
+    def pick(*args):
+        picker_arguments.append(args)
+        return str(path), ''
+    monkeypatch.setattr(main_window, 'open_file', pick)
+    shown = []
+    monkeypatch.setattr(visibility_report.VisibilityReportDialog, 'exec',
+                        lambda dialog: shown.append(dialog))
+    window = main_window.MainWindow(tmp_path)
+    window.controller.timer.stop()
+    try:
+        window.analyze_visibility_button.click()
+        assert picker_arguments[0][-1] == 'JSON Lines (*.jsonl)'
+        assert len(shown) == 1
+        assert shown[0].chart_a.duration.visible_s == 2
+        assert shown[0].chart_b.duration.invisible_s == 1
     finally:
         window.close()
 

@@ -38,5 +38,9 @@ def save_file(parent, *args, **kwargs):
     return file_dialog(parent, QFileDialog.getSaveFileName, parent, *args, **kwargs)
 
 
+def open_file(parent, *args, **kwargs):
+    return file_dialog(parent, QFileDialog.getOpenFileName, parent, *args, **kwargs)
+
+
 def existing_directory(parent, *args, **kwargs):
     return file_dialog(parent, QFileDialog.getExistingDirectory, parent, *args, **kwargs)

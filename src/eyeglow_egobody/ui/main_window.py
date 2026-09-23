@@ -15,7 +15,7 @@ from eyeglow_egobody.controller import Controller
 from eyeglow_egobody.model.panel_settings import PanelSettings
 from eyeglow_egobody.ui.settings_dialog import SettingsDialog, SettingsEditor
 from eyeglow_egobody.ui.export_dialog import VideoExportDialog, choose_file, default_filename
-from eyeglow_egobody.ui.file_dialogs import paused_animation, save_file
+from eyeglow_egobody.ui.file_dialogs import open_file, paused_animation, save_file
 from eyeglow_egobody.model.playlist import (ActivitiesPlaylist, PLAYLIST_KEYS,
                                             playlist_selections)
 from eyeglow_egobody.ui.playlist_analysis import PlaylistAnalysis
@@ -234,6 +234,7 @@ class MainWindow(QMainWindow):
         self.playlist_summary.setWordWrap(True)
         recordings_layout.addWidget(self.playlist_summary)
         self.analyze_playlist_button = button('Analyze activities playlist ...', self.analyze_activities_playlist, recordings_layout)
+        self.analyze_visibility_button = button('Analyze visibility ...', self.analyze_visibility, recordings_layout)
         self.analysis_progress = QProgressBar()
         self.analysis_progress.hide()
         recordings_layout.addWidget(self.analysis_progress)
@@ -471,6 +472,23 @@ class MainWindow(QMainWindow):
         self.sync()
 
     @suspend_animation
+    def analyze_visibility(self):
+        name, _ = open_file(self, 'Analyze visibility ...', str(Path.home()),
+                            'JSON Lines (*.jsonl)')
+        if not name:
+            return
+        from eyeglow_egobody.ui.visibility_report import (VisibilityReportDialog,
+                                                          load_visibility_report)
+        try:
+            report = load_visibility_report(name)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, 'Could not analyze visibility', str(exc))
+            return
+        dialog = VisibilityReportDialog(report, name, self)
+        dialog.exec()
+        dialog.deleteLater()
+
+    @suspend_animation
     def select_input_data(self):
         from eyeglow_egobody.ui.input_data_dialog import InputDataDialog
         dialog = InputDataDialog(self.panel_settings, self._save_user_defaults, self)
@@ -549,6 +567,7 @@ class MainWindow(QMainWindow):
         self.activity_button.setEnabled(not locked and bool(self.infos))
         self.analyze_playlist_button.setEnabled(not locked and self.activities_playlist is not None
                                                 and bool(self.activities_playlist.frame_count))
+        self.analyze_visibility_button.setEnabled(not locked)
         self.models_button.setEnabled(not locked and not loading)
         self.controls.setEnabled(not locked and usable and (not loading or playlist is not None))
         self.play.setEnabled(not locked and not loading and usable)
